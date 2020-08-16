@@ -1,65 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>Mysql中的MVCC（多版本并发控制）</title>
-    <url>/2020/08/16/Mysql%E4%B8%AD%E7%9A%84MVCC%EF%BC%88%E5%A4%9A%E7%89%88%E6%9C%AC%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6%EF%BC%89/</url>
-    <content><![CDATA[<h2 id="Mysql中的MVCC（多版本并发控制）"><a href="#Mysql中的MVCC（多版本并发控制）" class="headerlink" title="Mysql中的MVCC（多版本并发控制）"></a>Mysql中的MVCC（多版本并发控制）</h2><p>Mysql中的MVCC是一个特别难以理解的点，在讲述mvcc之前我们先来简单介绍关于数据库的事务的一点相关知识。</p>
-<p><strong>数据库的事务的特性：</strong></p>
-<ol>
-<li>原子性：每个事务都是不可分割的最小执行单位。</li>
-<li>隔离性：每个事务之间是相互隔离互不影响的。</li>
-<li>一致性：在一个事务中的操作要么全部成功要么全部失败。</li>
-<li>持久性：一旦事务结束，执行的结果是持久的。</li>
-</ol>
-<p><strong>事务的隔离级别：</strong></p>
-<ol>
-<li>读未提交：一个事务读取到另外一个事务还没有提交的结果。</li>
-<li>读已提交：一个事务只会读到另外一个事务提交的结果。（Oracle默认的隔离级别）</li>
-<li>可重复读：在一个事务中第一次读取一个数据的结果和后边读取这个数据的结果是一致的。（mysql默认的隔离级别）</li>
-<li>串行化：所有的事务都是串行执行的，不存在并行的情况。</li>
-</ol>
-<p>在上边介绍的四种隔离级别中第一种隔离级别很明显是不对的，最后一种很明显是效率底下的，所以在我们的mysql中基本上不会使用第一种和第四种隔离级别，所以我们接下来主要讨论第二种和第三种隔离级别。我们说到这两种隔离级别以后那么这两种隔离级别是如何实现的，在mysql中其实他就是借助于我们的MVCC来实现的这两种隔离级别。MVCC有两个特别重要的概念就是版本链和readview视图。</p>
-<p><strong>版本链：</strong></p>
-<p>​    对于使用InnoDB存储引擎的表来说，它的聚簇索引记录中都包含两个必要的隐藏列（row_id并不是必要的，我们 创建的表中有主键或者非NULL唯一键时都不会包含row_id列）</p>
-<ul>
-<li>trx_id：每次对某条记录进行改动时，都会把对应的事务id赋值给trx_id隐藏列。 </li>
-<li>roll_pointer：每次对某条记录进行改动时，这个隐藏列会存一个指针，可以通过这个指针找到该记 录修改前的信息。</li>
-</ul>
-<p>每个trx_id代表了一个事务，每个rollpointer则指向了当前事务的上一个事务。我们如果有一张user表如图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703211103307.png"></p>
-<p>​    </p>
-<p>​    图中我们用红色表示已经commit的事务，用绿色表示还没有提交的事务，最开始只有最下边的98号事务并且他是已经提交的，但是当99号事务开始的时候，就会讲roll_pointer指针指向98号事务并且将98号事务的数据放入undo日志中，以方便回滚。此时又来了一个100号事务执行了更新操作，把张三2改为张三3此时100号事务的roll_pointer指向99号事务的数据。同时100号事务没有结束，他又更新了一遍这条数据，此时将张三3改为了张三4，同理他的指针指向了之前的100号事务，此时又来了101号事务对事务进行了更新，指向了之前的100号事务。以上便构成了我们的版本链。</p>
-<p><strong>ReadView:</strong></p>
-<p>ReadView中主要包含4个比较重要的内容： </p>
-<ol>
-<li>m_ids：表示在生成ReadView时当前系统中活跃的读写事务的事务id列表。 </li>
-<li>min_trx_id：表示在生成ReadView时当前系统中活跃的读写事务中最小的事务id，也就是m_ids中的最小 值。 </li>
-<li>max_trx_id：表示生成ReadView时系统中应该分配给下一个事务的id值。 </li>
-<li>creator_trx_id：表示生成该ReadView的事务的事务id</li>
-</ol>
-<blockquote>
-<p>注意:max_trx_id并不是m_ids中的最大值，事务id是递增分配的。比方说现在有id为1，2，3这三个事务，之后id为3的事务提交了。那么一个新的读事务在生成ReadView时，m_ids就包括1和2，min_trx_id的值就是1， max_trx_id的值就是3,也就是说这个最大事务id是已经创建的事务id中的最大的id而不是活跃的最大id。</p>
-</blockquote>
-<p><strong>版本链访问规则：</strong></p>
-<p>当另外一个事务进行第一次查询操作的时候会生成这个readview，我们把上图的事务进行readview的生成m_ids就是[98,99,100,101]其中的min_trx_ids为98，max_trx_ids为101，通过最大的id和最小的id我们可以得到如下图的规则。</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703214900747.png" alt="image-20200703214900747"></p>
-<p>这样小于最小id的一定是已经提交的事务，大于最大id的一定是没有开始的事务，在最小以及最大的事务id之间的可能是已经提交过的也有可能是没有提交过的，所以我们就可以通过版本链从上向下遍历得到如下的步骤:</p>
-<ul>
-<li>如果被访问版本的trx_id属性值与ReadView中的creator_trx_id值相同，意味着当前事务在访问它自 己修改过的记录，所以该版本可以被当前事务访问。 </li>
-<li>如果被访问版本的trx_id属性值小于ReadView中的min_trx_id值，表明生成该版本的事务在当前事 务生成ReadView前已经提交，所以该版本可以被当前事务访问。</li>
-<li>如果被访问版本的trx_id属性值大于ReadView中的max_trx_id值，表明生成该版本的事务在当前事 务生成ReadView后才开启，所以该版本不可以被当前事务访问。 </li>
-<li>如果被访问版本的trx_id属性值在ReadView的min_trx_id和max_trx_id之间，那就需要判断一下 trx_id属性值是不是在m_ids列表中，如果在，说明创建ReadView时生成该版本的事务还是活跃 的，该版本不可以被访问；如果不在，说明创建ReadView时生成该版本的事务已经被提交，该版 本可以被访问</li>
-</ul>
-<p>需要注意的是在上图中我们的id是递减的有时候可能因为提交的顺序不一致导致不一定是递减的，如下图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703220024806.png" alt="image-20200703220024806"></p>
-<p>​    我们既然说过关于读已提交和可重复读都是利用了版本链那么他们有什么区别呢，其实对于读已提交来说，版本链的生成是每一次查询都会生成一个readview，每次都生成一个readview就是及时的更新已经提交的事务，这样就可以读取到已经提交的事务的数据了。而可重复读则是在第一次查询的时候生成readview,这样不会及时更新，可以重复读取数据。</p>
-<p>​    我们上边只是针对修改做了简述，还有就是在删除也会使用到MVCC，其实删除可以作为update的特殊情况，删除时会将版本链上的数据复制一份，然后将trx_id修改成删除操作的trx_id，同时在该条记录的头信息（record header）里的（deleted flag）标记位上写上true，来表示当前的记录已经被删除，在查询的时候按照上边的规则，查到对应的记录，如果deleted flag的数据为true意味着已经被删除不返回数据。</p>
-<p><strong>MVCC总结：</strong><br>    MVCC（Multi-Version Concurrency Control ，多版本并发控制）指的就是在使用READ COMMITTD、 REPEATABLE READ这两种隔离级别的事务在执行普通的SEELCT操作时访问记录的版本链的过程。可以使不同 事务的读-写、写-读操作并发执行，从而提升系统性能。READ COMMITTD、REPEATABLE READ这两个隔离级 别的一个很大不同就是：生成ReadView的时机不同，READ COMMITTD在每一次进行普通SELECT操作前都会 生成一个ReadView，而REPEATABLE READ只在第一次进行普通SELECT操作前生成一个ReadView，之后的查 询操作都重复使用这个ReadView就好了。</p>
-]]></content>
-  </entry>
-  <entry>
-    <title>HashMap源码解析与理解</title>
-    <url>/2020/08/16/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/</url>
+    <title>jdk8中的HashMap源码解析与理解</title>
+    <url>/2017/05/26/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/</url>
     <content><![CDATA[<h2 id="jdk8中的HashMap源码解析与理解"><a href="#jdk8中的HashMap源码解析与理解" class="headerlink" title="jdk8中的HashMap源码解析与理解"></a>jdk8中的HashMap源码解析与理解</h2><p>###一、预备知识</p>
 <p><strong>关于hash：</strong></p>
 <p>​    有个非常关键的特点，不定长度的输入固定长度的输出，将一个对象经过一定的hash算法映射成相同长度的hash值。</p>
@@ -194,6 +137,69 @@
 </ol>
 </li>
 </ol>
+]]></content>
+      <categories>
+        <category>源码</category>
+      </categories>
+      <tags>
+        <tag>技术</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Mysql中的MVCC（多版本并发控制）</title>
+    <url>/2020/08/16/Mysql%E4%B8%AD%E7%9A%84MVCC%EF%BC%88%E5%A4%9A%E7%89%88%E6%9C%AC%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6%EF%BC%89/</url>
+    <content><![CDATA[<h2 id="Mysql中的MVCC（多版本并发控制）"><a href="#Mysql中的MVCC（多版本并发控制）" class="headerlink" title="Mysql中的MVCC（多版本并发控制）"></a>Mysql中的MVCC（多版本并发控制）</h2><p>Mysql中的MVCC是一个特别难以理解的点，在讲述mvcc之前我们先来简单介绍关于数据库的事务的一点相关知识。</p>
+<p><strong>数据库的事务的特性：</strong></p>
+<ol>
+<li>原子性：每个事务都是不可分割的最小执行单位。</li>
+<li>隔离性：每个事务之间是相互隔离互不影响的。</li>
+<li>一致性：在一个事务中的操作要么全部成功要么全部失败。</li>
+<li>持久性：一旦事务结束，执行的结果是持久的。</li>
+</ol>
+<p><strong>事务的隔离级别：</strong></p>
+<ol>
+<li>读未提交：一个事务读取到另外一个事务还没有提交的结果。</li>
+<li>读已提交：一个事务只会读到另外一个事务提交的结果。（Oracle默认的隔离级别）</li>
+<li>可重复读：在一个事务中第一次读取一个数据的结果和后边读取这个数据的结果是一致的。（mysql默认的隔离级别）</li>
+<li>串行化：所有的事务都是串行执行的，不存在并行的情况。</li>
+</ol>
+<p>在上边介绍的四种隔离级别中第一种隔离级别很明显是不对的，最后一种很明显是效率底下的，所以在我们的mysql中基本上不会使用第一种和第四种隔离级别，所以我们接下来主要讨论第二种和第三种隔离级别。我们说到这两种隔离级别以后那么这两种隔离级别是如何实现的，在mysql中其实他就是借助于我们的MVCC来实现的这两种隔离级别。MVCC有两个特别重要的概念就是版本链和readview视图。</p>
+<p><strong>版本链：</strong></p>
+<p>​    对于使用InnoDB存储引擎的表来说，它的聚簇索引记录中都包含两个必要的隐藏列（row_id并不是必要的，我们 创建的表中有主键或者非NULL唯一键时都不会包含row_id列）</p>
+<ul>
+<li>trx_id：每次对某条记录进行改动时，都会把对应的事务id赋值给trx_id隐藏列。 </li>
+<li>roll_pointer：每次对某条记录进行改动时，这个隐藏列会存一个指针，可以通过这个指针找到该记 录修改前的信息。</li>
+</ul>
+<p>每个trx_id代表了一个事务，每个rollpointer则指向了当前事务的上一个事务。我们如果有一张user表如图：</p>
+<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703211103307.png"></p>
+<p>​    </p>
+<p>​    图中我们用红色表示已经commit的事务，用绿色表示还没有提交的事务，最开始只有最下边的98号事务并且他是已经提交的，但是当99号事务开始的时候，就会讲roll_pointer指针指向98号事务并且将98号事务的数据放入undo日志中，以方便回滚。此时又来了一个100号事务执行了更新操作，把张三2改为张三3此时100号事务的roll_pointer指向99号事务的数据。同时100号事务没有结束，他又更新了一遍这条数据，此时将张三3改为了张三4，同理他的指针指向了之前的100号事务，此时又来了101号事务对事务进行了更新，指向了之前的100号事务。以上便构成了我们的版本链。</p>
+<p><strong>ReadView:</strong></p>
+<p>ReadView中主要包含4个比较重要的内容： </p>
+<ol>
+<li>m_ids：表示在生成ReadView时当前系统中活跃的读写事务的事务id列表。 </li>
+<li>min_trx_id：表示在生成ReadView时当前系统中活跃的读写事务中最小的事务id，也就是m_ids中的最小 值。 </li>
+<li>max_trx_id：表示生成ReadView时系统中应该分配给下一个事务的id值。 </li>
+<li>creator_trx_id：表示生成该ReadView的事务的事务id</li>
+</ol>
+<blockquote>
+<p>注意:max_trx_id并不是m_ids中的最大值，事务id是递增分配的。比方说现在有id为1，2，3这三个事务，之后id为3的事务提交了。那么一个新的读事务在生成ReadView时，m_ids就包括1和2，min_trx_id的值就是1， max_trx_id的值就是3,也就是说这个最大事务id是已经创建的事务id中的最大的id而不是活跃的最大id。</p>
+</blockquote>
+<p><strong>版本链访问规则：</strong></p>
+<p>当另外一个事务进行第一次查询操作的时候会生成这个readview，我们把上图的事务进行readview的生成m_ids就是[98,99,100,101]其中的min_trx_ids为98，max_trx_ids为101，通过最大的id和最小的id我们可以得到如下图的规则。</p>
+<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703214900747.png" alt="image-20200703214900747"></p>
+<p>这样小于最小id的一定是已经提交的事务，大于最大id的一定是没有开始的事务，在最小以及最大的事务id之间的可能是已经提交过的也有可能是没有提交过的，所以我们就可以通过版本链从上向下遍历得到如下的步骤:</p>
+<ul>
+<li>如果被访问版本的trx_id属性值与ReadView中的creator_trx_id值相同，意味着当前事务在访问它自 己修改过的记录，所以该版本可以被当前事务访问。 </li>
+<li>如果被访问版本的trx_id属性值小于ReadView中的min_trx_id值，表明生成该版本的事务在当前事 务生成ReadView前已经提交，所以该版本可以被当前事务访问。</li>
+<li>如果被访问版本的trx_id属性值大于ReadView中的max_trx_id值，表明生成该版本的事务在当前事 务生成ReadView后才开启，所以该版本不可以被当前事务访问。 </li>
+<li>如果被访问版本的trx_id属性值在ReadView的min_trx_id和max_trx_id之间，那就需要判断一下 trx_id属性值是不是在m_ids列表中，如果在，说明创建ReadView时生成该版本的事务还是活跃 的，该版本不可以被访问；如果不在，说明创建ReadView时生成该版本的事务已经被提交，该版 本可以被访问</li>
+</ul>
+<p>需要注意的是在上图中我们的id是递减的有时候可能因为提交的顺序不一致导致不一定是递减的，如下图：</p>
+<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703220024806.png" alt="image-20200703220024806"></p>
+<p>​    我们既然说过关于读已提交和可重复读都是利用了版本链那么他们有什么区别呢，其实对于读已提交来说，版本链的生成是每一次查询都会生成一个readview，每次都生成一个readview就是及时的更新已经提交的事务，这样就可以读取到已经提交的事务的数据了。而可重复读则是在第一次查询的时候生成readview,这样不会及时更新，可以重复读取数据。</p>
+<p>​    我们上边只是针对修改做了简述，还有就是在删除也会使用到MVCC，其实删除可以作为update的特殊情况，删除时会将版本链上的数据复制一份，然后将trx_id修改成删除操作的trx_id，同时在该条记录的头信息（record header）里的（deleted flag）标记位上写上true，来表示当前的记录已经被删除，在查询的时候按照上边的规则，查到对应的记录，如果deleted flag的数据为true意味着已经被删除不返回数据。</p>
+<p><strong>MVCC总结：</strong><br>    MVCC（Multi-Version Concurrency Control ，多版本并发控制）指的就是在使用READ COMMITTD、 REPEATABLE READ这两种隔离级别的事务在执行普通的SEELCT操作时访问记录的版本链的过程。可以使不同 事务的读-写、写-读操作并发执行，从而提升系统性能。READ COMMITTD、REPEATABLE READ这两个隔离级 别的一个很大不同就是：生成ReadView的时机不同，READ COMMITTD在每一次进行普通SELECT操作前都会 生成一个ReadView，而REPEATABLE READ只在第一次进行普通SELECT操作前生成一个ReadView，之后的查 询操作都重复使用这个ReadView就好了。</p>
 ]]></content>
   </entry>
   <entry>
