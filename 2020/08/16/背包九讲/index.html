@@ -1,138 +1,200 @@
-<!DOCTYPE HTML>
-<html>
+<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <link rel="dns-prefetch" href="http://yoursite.com">
-  
-  <title>背包九讲 | Hexo</title>
-  <meta name="author" content="TankyZhang">
-  
-  <meta name="description" content="软件开发的小学生">
-  
-  
-  <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
 
-  <meta property="og:title" content="背包九讲"/>
-  <meta property="og:site_name" content="Hexo"/>
+<link rel="stylesheet" href="/css/main.css">
 
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},"path":"search.xml"};
+  </script>
+
+  <meta name="description" content="背包九讲​    动态规划解题步骤（问题抽象化、建立模型、寻找约束条件、判断是否满足最优性原理、找大问题与小问题的递推关系式、填表、寻找解组成）。  01背包问题 题目：有N件物品和一个容量为V的背包。第i件物品的重量是c[i]，价值是w[i]。求解将哪些物品装入背包可使这些物品的费用总和不超过背包容量，且价值总和最大。 ​    利用动态规划解决这个问题，首先就是要找出其中的前后依赖关系，我们要">
+<meta property="og:type" content="article">
+<meta property="og:title" content="背包九讲">
+<meta property="og:url" content="http://yoursite.com/2020/08/16/%E8%83%8C%E5%8C%85%E4%B9%9D%E8%AE%B2/index.html">
+<meta property="og:site_name" content="Tanky">
+<meta property="og:description" content="背包九讲​    动态规划解题步骤（问题抽象化、建立模型、寻找约束条件、判断是否满足最优性原理、找大问题与小问题的递推关系式、填表、寻找解组成）。  01背包问题 题目：有N件物品和一个容量为V的背包。第i件物品的重量是c[i]，价值是w[i]。求解将哪些物品装入背包可使这些物品的费用总和不超过背包容量，且价值总和最大。 ​    利用动态规划解决这个问题，首先就是要找出其中的前后依赖关系，我们要">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-08-16T03:06:51.026Z">
+<meta property="article:modified_time" content="2020-06-17T23:13:16.084Z">
+<meta property="article:author" content="TankyZhang">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://yoursite.com/2020/08/16/%E8%83%8C%E5%8C%85%E4%B9%9D%E8%AE%B2/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>背包九讲 | Tanky</title>
   
-    <meta property="og:image" content=""/>
-  
 
-  <link rel="alternate" href="/atom.xml" title="Hexo" type="application/atom+xml">
 
-  <link rel="preload" as="style" href="/css/style.css" media="screen" type="text/css">
-  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
 
-  <link rel="icon" class="js-site-favicon" type="image/svg+xml" href="https://github.githubassets.com/favicons/favicon.svg">
-  <link href="https://unpkg.com" rel="dns-prefetch" />
-  <link href="https://busuanzi.ibruce.info" rel="dns-prefetch" />
-  <link href="https://cdn1.lncld.net" rel="dns-prefetch" />
-  
-  <link href="https://xpjzs0ff.api.lncld.net" rel="dns-prefetch" />
-  
-<meta name="generator" content="Hexo 4.2.1"></head>
 
-<body>
-  <div class="container">
-    <div class="left-col" style="background-image:url('https://tva1.sinaimg.cn/large/007S8ZIlgy1ggdmi6yapmj30dw0zk0wm.jpg')">
-      <div class="intrude-less">
-        <header id="header" class="inner">
-          <a href="/">
-            <div class="profilepic"><img src='https://tva1.sinaimg.cn/large/007S8ZIlgy1ggdmr1k3k0j305k05k74j.jpg'></div>
-          </a>
-          <div class="author-name"><a href="/">TankyZhang</a></div>
-          <p class="aboutme">软件开发的小学生</p>
-          <nav id="main-nav">
-            <ul class="main">
-              
-              <li>
-                
-                  <a href="/archives">归档</a>
-                
-              </li>
-              
-              <li>
-                
-                  <a href="/categories">专题</a>
-                
-              </li>
-              
-              <li>
-                
-                  <a href="/friendlinks">友链</a>
-                
-              </li>
-              
-              <li>
-                
-                  <a href="/life">关于</a>
-                
-              </li>
-              
-              <li>
-                
-                  <a href="/search">搜索</a>
-                
-              </li>
-              
-            </ul>
-          </nav>
-          <nav id="sub-nav">
-            <div class="social">
-              
-              <a class="twitter" href="https://twitter.com/thinkerchan" target="_blank" rel="noopener" title="Twitter">Twitter</a>
-              
-              
-              
-              <a class="github" href="https://github.com/thinkerchan" target="_blank" rel="noopener" title="Github">Github</a>
-              
-              
-              <a class="yuque" href="https://yuque.com/testdog" target="_blank" rel="noopener" title="语雀">语雀</a>
-              
 
-              
-              <a class="rss" href="/atom.xml" title="RSS">RSS</a>
-              
-            </div>
-          </nav>
-        </header>
-      </div>
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
     </div>
-    <div class="mid-col">
-      <div class="mid-col-container">
-        <div id="content" class="inner">
-          <article class="post">
+  </div>
 
-  
-    <div class="meta">
-      
-<div class="date">
+  <div class="site-meta">
 
-<time datetime="2020-08-16T03:06:51.026Z"
-      
-      data-updated="true"
-       itemprop="datePublished">
-  2020-08-16
-</time>
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Tanky</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
 
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
 
 
 
 
 </div>
+    </header>
 
-    </div>
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
   
-  <h1 class="title" itemprop="name">背包九讲</h1>
-  <div class="entry-content" itemprop="articleBody">
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/08/16/%E8%83%8C%E5%8C%85%E4%B9%9D%E8%AE%B2/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="TankyZhang">
+      <meta itemprop="description" content="软件开发的小学生">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Tanky">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          背包九讲
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-08-16 11:06:51" itemprop="dateCreated datePublished" datetime="2020-08-16T11:06:51+08:00">2020-08-16</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-06-18 07:13:16" itemprop="dateModified" datetime="2020-06-18T07:13:16+08:00">2020-06-18</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
     
-    <div class="post-toc">
-      <div class="toc-title">TOC</div>
-      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#背包九讲"><span class="toc-number">1.</span> <span class="toc-text">背包九讲</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#输入描述"><span class="toc-number">1.0.0.1.</span> <span class="toc-text">输入描述:</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#输出描述"><span class="toc-number">1.0.0.2.</span> <span class="toc-text">输出描述:</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#输入"><span class="toc-number">2.</span> <span class="toc-text">输入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#输出"><span class="toc-number">3.</span> <span class="toc-text">输出</span></a></li></ol>
-    </div>
     
-    <h2 id="背包九讲"><a href="#背包九讲" class="headerlink" title="背包九讲"></a>背包九讲</h2><p>​    <strong>动态规划解题步骤（问题抽象化、建立模型、寻找约束条件、判断是否满足最优性原理、找大问题与小问题的递推关系式、填表、寻找解组成）。</strong></p>
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="背包九讲"><a href="#背包九讲" class="headerlink" title="背包九讲"></a>背包九讲</h2><p>​    <strong>动态规划解题步骤（问题抽象化、建立模型、寻找约束条件、判断是否满足最优性原理、找大问题与小问题的递推关系式、填表、寻找解组成）。</strong></p>
 <ol>
 <li><p><strong>01背包问题</strong></p>
 <p>题目：<br>有N件物品和一个容量为V的背包。第i件物品的重量是c[i]，价值是w[i]。求解将哪些物品装入背包可使这些物品的费用总和不超过背包容量，且价值总和最大。</p>
@@ -474,53 +536,186 @@
 <p>   ​    一个“主件”和它的附件集合，实际上是一个物品组，每一个选择某个“主件”或者“主件+附件”的策略，实际上相当于这个物品组中的一个物品，其费用和价值，都是策略中的物品的值的总和。这样的话，对于该简化描述的依赖背包问题的，可以转化为分组背包问题，参考分组背包问题的解决思路，可以解决该问题。</p>
 <p>   代码示例如下：</p>
    <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.Scanner;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PackageProblemRely</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        Scanner scanner = <span class="keyword">new</span> Scanner(System.in);</span><br><span class="line">        <span class="comment">// 总钱数</span></span><br><span class="line">        <span class="keyword">int</span> N = scanner.nextInt();</span><br><span class="line">        <span class="comment">// 购买物品个数</span></span><br><span class="line">        <span class="keyword">int</span> m = scanner.nextInt();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span>[] f = <span class="keyword">new</span> <span class="keyword">int</span>[N + <span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 分组，goods[i][0]为主件，goods[i][1]为附件1，goods[i][2]为附件2</span></span><br><span class="line"></span><br><span class="line">        Good[][] goods1 = <span class="keyword">new</span> Good[<span class="number">60</span>][<span class="number">4</span>];</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt;= m; i++) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">int</span> v = scanner.nextInt();</span><br><span class="line">            <span class="keyword">int</span> p = scanner.nextInt();</span><br><span class="line">            <span class="keyword">int</span> q = scanner.nextInt();</span><br><span class="line"></span><br><span class="line">            Good t = <span class="keyword">new</span> Good(v, v * p);</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (q == <span class="number">0</span>) &#123;</span><br><span class="line">                goods1[i][<span class="number">0</span>] = t;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">if</span> (goods1[q][<span class="number">1</span>] == <span class="keyword">null</span>) &#123;</span><br><span class="line">                    goods1[q][<span class="number">1</span>] = t;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    goods1[q][<span class="number">2</span>] = t;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt;= m; i++) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> j = N; j &gt;= <span class="number">0</span> &amp;&amp; goods1[i][<span class="number">0</span>] != <span class="keyword">null</span>; j--) &#123;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//以下代码从分组中选择价值最大的。共五种情况：不选主件，选主件，选附件1和主件，选附件2和主件，选附件1和附件2和主件</span></span><br><span class="line">                Good master = goods1[i][<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">                <span class="keyword">int</span> max = f[j];</span><br><span class="line">                <span class="keyword">if</span> (j &gt;= master.v) &#123;</span><br><span class="line">                    max=Math.max(max,f[j - master.v] + master.vp);</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//如果附件1不为null</span></span><br><span class="line">                <span class="keyword">int</span> vt;</span><br><span class="line">                <span class="keyword">if</span> (goods1[i][<span class="number">1</span>] != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (j &gt;= (vt = master.v + goods1[i][<span class="number">1</span>].v) )&#123;</span><br><span class="line">                        max = Math.max(max,f[j - vt] + master.vp + goods1[i][<span class="number">1</span>].vp);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//如果附件2不为null</span></span><br><span class="line">                <span class="keyword">if</span> (goods1[i][<span class="number">2</span>] != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (j &gt;= (vt = master.v + goods1[i][<span class="number">1</span>].v + goods1[i][<span class="number">2</span>].v)) &#123;</span><br><span class="line">                        max = Math.max(max,f[j - vt] + master.vp + goods1[i][<span class="number">1</span>].vp + goods1[i][<span class="number">2</span>].vp);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">                f[j] = max;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        System.out.println(f[N]);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Good</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> v;</span><br><span class="line">    <span class="keyword">int</span> vp;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">Good</span><span class="params">(<span class="keyword">int</span> v, <span class="keyword">int</span> vp)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.v = v;</span><br><span class="line">        <span class="keyword">this</span>.vp = vp;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-  </div>
+    </div>
 
-</article>
-
-
-  <nav id="pagenavi">
     
     
-    <a href="/2020/08/16/myFirstBlog/" class="next">下一篇：myFirstBlog</a>
     
-  </nav>
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/08/16/myFirstBlog/" rel="prev" title="myFirstBlog">
+      <i class="fa fa-chevron-left"></i> myFirstBlog
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/08/16/%E4%B8%89%E7%A7%8D%E6%89%93%E5%AE%B6%E5%8A%AB%E8%88%8D%E9%97%AE%E9%A2%98%E8%A7%A3%E6%9E%90/" rel="next" title="三种打家劫舍问题解析">
+      三种打家劫舍问题解析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
 
         </div>
-        
-        
-          <div class="post-comments" id="Jcmt">
-            <h1 class="post-comments-title">访客评论</h1>
-            <div id="Jcomment"></div>
-          </div>
-        
-      </div>
-      <footer id="footer" class="inner">
-        © 2020 - TankyZhang -
-        <span id="busuanzi_container_site_pv">PV <span id="busuanzi_value_site_pv"></span></span>
-        <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> & <a href="https://github.com/thinkerchan/hexo-theme-greyshade" target="_blank" rel="noopener">GreyShade</a></p>
-      </footer>
-    </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
   </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#背包九讲"><span class="nav-number">1.</span> <span class="nav-text">背包九讲</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#输入描述"><span class="nav-number">1.0.0.1.</span> <span class="nav-text">输入描述:</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#输出描述"><span class="nav-number">1.0.0.2.</span> <span class="nav-text">输出描述:</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#输入"><span class="nav-number">2.</span> <span class="nav-text">输入</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#输出"><span class="nav-number">3.</span> <span class="nav-text">输出</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">TankyZhang</p>
+  <div class="site-description" itemprop="description">软件开发的小学生</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">11</span>
+          <span class="site-state-item-name">博客</span>
+        </a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
   
-  <script src="https://cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
-  <script src='https://unpkg.com/valine@1.4.14/dist/Valine.min.js'></script>
-  <script>
-    new Valine({
-      el: '#Jcomment',
-      appId: 'XPJzs0FfufkFfuBjbJraqhbo-gzGzoHsz',
-      appKey: 'QoS0zL4Y2xTDviitGOPkvCGv' ,
-      notify: true,
-      verify: false,
-      avatar: 'mm',
-      pageSize: '10',
-      placeholder:'Valine+Leancloud提供评论'
-    })
-  </script>
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">TankyZhang</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
   
-  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
   
-  <script async src="https://s5.cnzz.com/z_stat.php?id=1276809529&web_id=1276809529"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   
+
+  
+
 </body>
 </html>
