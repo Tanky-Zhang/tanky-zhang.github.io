@@ -1,0 +1,226 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="dns-prefetch" href="http://yoursite.com">
+  
+  <title>三种打家劫舍问题解析 | Tanky</title>
+  <meta name="author" content="TankyZhang">
+  
+  <meta name="description" content="软件开发的小学生">
+  
+  
+  <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
+
+  <meta property="og:title" content="三种打家劫舍问题解析"/>
+  <meta property="og:site_name" content="Tanky"/>
+
+  
+    <meta property="og:image" content=""/>
+  
+
+  <link rel="alternate" href="/atom.xml" title="Tanky" type="application/atom+xml">
+
+  <link rel="preload" as="style" href="/css/style.css" media="screen" type="text/css">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+
+  <link rel="icon" class="js-site-favicon" type="image/svg+xml" href="https://github.githubassets.com/favicons/favicon.svg">
+  <link href="https://unpkg.com" rel="dns-prefetch" />
+  <link href="https://busuanzi.ibruce.info" rel="dns-prefetch" />
+  <link href="https://cdn1.lncld.net" rel="dns-prefetch" />
+  
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+  <div class="container">
+    <div class="left-col" style="background-image:url('https://tva1.sinaimg.cn/large/007S8ZIlgy1ggdmi6yapmj30dw0zk0wm.jpg')">
+      <div class="intrude-less">
+        <header id="header" class="inner">
+          <a href="/">
+            <div class="profilepic"><img src='https://tva1.sinaimg.cn/large/007S8ZIlgy1ggdmr1k3k0j305k05k74j.jpg'></div>
+          </a>
+          <div class="author-name"><a href="/">TankyZhang</a></div>
+          <p class="aboutme">软件开发的小学生</p>
+          <nav id="main-nav">
+            <ul class="main">
+              
+              <li>
+                
+                  <a href="/archives">归档</a>
+                
+              </li>
+              
+              <li>
+                
+                  <a href="/categories">专题</a>
+                
+              </li>
+              
+              <li>
+                
+                  <a href="/friendlinks">友链</a>
+                
+              </li>
+              
+              <li>
+                
+                  <a href="/life">关于</a>
+                
+              </li>
+              
+              <li>
+                
+                  <a href="/search">搜索</a>
+                
+              </li>
+              
+            </ul>
+          </nav>
+          <nav id="sub-nav">
+            <div class="social">
+              
+              <a class="twitter" href="https://twitter.com/" target="_blank" rel="noopener" title="Twitter">Twitter</a>
+              
+              
+              
+              <a class="github" href="https://github.com/" target="_blank" rel="noopener" title="Github">Github</a>
+              
+              
+              <a class="yuque" href="https://yuque.com/" target="_blank" rel="noopener" title="语雀">语雀</a>
+              
+
+              
+              <a class="rss" href="/atom.xml" title="RSS">RSS</a>
+              
+            </div>
+          </nav>
+        </header>
+      </div>
+    </div>
+    <div class="mid-col">
+      <div class="mid-col-container">
+        <div id="content" class="inner">
+          <article class="post">
+
+  
+    <div class="meta">
+      
+<div class="date">
+
+<time datetime="2020-08-16T03:25:43.108Z"
+      
+      data-updated="true"
+       itemprop="datePublished">
+  2020-08-16
+</time>
+
+
+
+
+
+</div>
+
+    </div>
+  
+  <h1 class="title" itemprop="name">三种打家劫舍问题解析</h1>
+  <div class="entry-content" itemprop="articleBody">
+    
+    <div class="post-toc">
+      <div class="toc-title">TOC</div>
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#三种打家劫舍问题解析"><span class="toc-number">1.</span> <span class="toc-text">三种打家劫舍问题解析</span></a></li></ol>
+    </div>
+    
+    <h2 id="三种打家劫舍问题解析"><a href="#三种打家劫舍问题解析" class="headerlink" title="三种打家劫舍问题解析"></a>三种打家劫舍问题解析</h2><p>在力扣的题库种右这样一种题目，是一种经典的动态规划类题目。</p>
+<ul>
+<li><p><strong>简单版本的打家劫舍</strong></p>
+<p>你是一个专业的小偷，计划偷窃沿街的房屋。每间房内都藏有一定的现金，影响你偷窃的唯一制约因素就是相邻的房屋装有相互连通的防盗系统，如果两间相邻的房屋在同一晚上被小偷闯入，系统会自动报警。</p>
+<p>给定一个代表每个房屋存放金额的非负整数数组，计算你 不触动警报装置的情况下 ，一夜之内能够偷窃到的最高金额。</p>
+<blockquote>
+<p>示例 1：</p>
+<p>输入：[1,2,3,1]</p>
+<p>输出：4<br>解释：偷窃 1 号房屋 (金额 = 1) ，然后偷窃 3 号房屋 (金额 = 3)。<br>     偷窃到的最高金额 = 1 + 3 = 4 。</p>
+<p>示例 2：</p>
+<p>输入：[2,7,9,3,1]<br>输出：12<br>解释：偷窃 1 号房屋 (金额 = 2), 偷窃 3 号房屋 (金额 = 9)，接着偷窃 5 号房屋 (金额 = 1)。<br>     偷窃到的最高金额 = 2 + 9 + 1 = 12 。</p>
+</blockquote>
+</li>
+</ul>
+<p>  提示：</p>
+<p>  0 &lt;= nums.length &lt;= 100<br>  0 &lt;= nums[i] &lt;= 400</p>
+<p>  <strong>题目解析：</strong></p>
+<p>  ​    这个问题就很简单了，我们思考满足打家劫舍条件的就是两家不能相连，也就是说当打劫到当前店铺的他不能打劫相邻的上一家店铺，所以我们可以建立两个变量，一个用来存放打劫到当前房屋的时候的最大金额，以及打劫到相邻的上家房屋时候的最大金额，而当前房屋的最大金额又是打劫到上上家房屋时的最大金额加上当前金额，并且我们有一个替换过程，当我们继续往下迭代的时候此一次的n-1家的最大金额就等于当前的最大金额，而下个迭代的n-2家的最大金额就是本迭代的n-1家的最大金额，我们不断的进行替换，迭代下去。</p>
+<p>  <strong>自己在这个问题中存在的疑问：</strong></p>
+<p>  ​    自己碰到的过不去的点就在于自己本能想到前后都要兼顾不能打劫，意思就是我打劫到当前房屋以后我需要考虑相邻上家不能打劫，相邻下家不能打劫，这就导致了没法继续思考下去，上边的解决方案无疑是比较巧妙的一种解决方式，只考虑打劫到当前房屋时对打劫过来的店铺进行考虑，而不去考虑还未打劫的房屋。</p>
+<p>  <strong>代码实现：</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 解析：这个问题的关键是要建立一种思路，什么思路呢？</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 要这样思考就是要考虑如果打劫这家店铺需要什么条件？</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 打劫这家店铺就不能够打劫它相邻的上一家店铺，有人可能会说</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 他的下一家也不能打劫，但是我们想，当我们打劫到下一家的时候是不是同样的不能打劫上一家</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 接下来要考虑另外一个问题：</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 我们打劫到当前店铺以后所获取的钱应该是之前n-2家店铺的获取的钱的最大值加上当前店铺的钱</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 我们不能够直接去考虑到底有多少种打劫方式。那样会极为复杂</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(<span class="keyword">int</span>[] num)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> n_2=<span class="number">0</span>;<span class="comment">//前n-2家店的最大钱数</span></span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> n_1=<span class="number">0</span>;<span class="comment">//第n_1家店的最大钱数  如果我们不打劫当前店铺那么此时最大的钱数就是前n-1家的最大值</span></span><br><span class="line"></span><br><span class="line">       <span class="keyword">for</span>(<span class="keyword">int</span> i=<span class="number">0</span>;i&lt;num.length;i++)&#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">int</span> temp=n_1;</span><br><span class="line"></span><br><span class="line">           n_1=Math.max(n_2+num[i],n_1);<span class="comment">//把前n-2的数据和当前的数据相加  然后与前n-1家的最大值做比较</span></span><br><span class="line"></span><br><span class="line">           n_2=temp;<span class="comment">//下一次循环的时候n-2就会等于这次的n-1</span></span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p><strong>稍微复杂的打家劫舍问题解析</strong></p>
+<p>你是一个专业的小偷，计划偷窃沿街的房屋，每间房内都藏有一定的现金。这个地方所有的房屋都围成一圈，这意味着第一个房屋和最后一个房屋是紧挨着的。同时，相邻的房屋装有相互连通的防盗系统，如果两间相邻的房屋在同一晚上被小偷闯入，系统会自动报警。</p>
+<p>给定一个代表每个房屋存放金额的非负整数数组，计算你在不触动警报装置的情况下，能够偷窃到的最高金额。</p>
+<blockquote>
+<p>示例 1:</p>
+<p>输入: [2,3,2]<br>输出: 3<br>解释: 你不能先偷窃 1 号房屋（金额 = 2），然后偷窃 3 号房屋（金额 = 2）, 因为他们是相邻的。<br>示例 2:</p>
+<p>输入: [1,2,3,1]<br>输出: 4<br>解释: 你可以先偷窃 1 号房屋（金额 = 1），然后偷窃 3 号房屋（金额 = 3）。<br>     偷窃到的最高金额 = 1 + 3 = 4 。</p>
+<p>​</p>
+</blockquote>
+<p>​    和简单版本不同的是这次所有的房屋是围成圈的，有一个思路，如果我们选择了第一个家就不能选择最后一家，如果我们选择了最后一家就不能选择第一家，当然我们可以第一家和最后一家都不选，但是这样我们肯定没有前两种情况打劫的钱多，所以我们只考虑前两种即可，基于前两种情况的考虑我们可以将环形的数组分为两个单向的数组，即索引位0到（n-2）和1到（n-1）然后我们利用普通版的打家劫舍代码分别去计算这两种情况然后取最大值就可以了，所以我们就可以得到我们的代码。</p>
+<p><strong>代码实现</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(<span class="keyword">int</span>[] nums)</span> </span>&#123;</span><br><span class="line"> </span><br><span class="line">        <span class="keyword">if</span>(nums.length==<span class="number">1</span>)&#123;</span><br><span class="line">            <span class="keyword">return</span> nums[<span class="number">0</span>];</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(nums.length==<span class="number">0</span>)&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> Math.max(rober(nums,<span class="number">0</span>,nums.length-<span class="number">2</span>),rober(nums,<span class="number">1</span>,nums.length-<span class="number">1</span>));</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rober</span><span class="params">(<span class="keyword">int</span>[] nums,<span class="keyword">int</span> start,<span class="keyword">int</span> end)</span></span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//到达上一个最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_1=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//到达上上个的最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_2=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span>(<span class="keyword">int</span> i=start;i&lt;=end;i++)&#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">int</span> temp=n_1;</span><br><span class="line"></span><br><span class="line">            n_1= Math.max(n_2+nums[i],n_1);</span><br><span class="line"></span><br><span class="line">            n_2=temp;</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​</p>
+</li>
+<li><p><strong>终极打家劫舍问题</strong></p>
+<p>在上次打劫完一条街道之后和一圈房屋后，小偷又发现了一个新的可行窃的地区。这个地区只有一个入口，我们称之为“根”。 除了“根”之外，每栋房子有且只有一个“父“房子与之相连。一番侦察之后，聪明的小偷意识到“这个地方的所有房屋的排列类似于一棵二叉树”。 如果两个直接相连的房子在同一天晚上被打劫，房屋将自动报警。</p>
+<p>计算在不触动警报的情况下，小偷一晚能够盗取的最高金额。</p>
+<blockquote>
+<p>示例 1:</p>
+<p>输入: [3,2,3,null,3,null,1]</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">  <span class="number">3</span></span><br><span class="line"> / \</span><br><span class="line"><span class="number">2</span>   <span class="number">3</span></span><br><span class="line"> \    \  </span><br><span class="line">  <span class="number">3</span>     <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>输出: 7<br>解释: 小偷一晚能够盗取的最高金额 = 3 + 3 + 1 = 7.<br>示例 2:</p>
+<p>输入: [3,4,5,1,3,null,1]</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">    <span class="number">3</span></span><br><span class="line">   / \</span><br><span class="line">  <span class="number">4</span>   <span class="number">5</span></span><br><span class="line"> / \   \ </span><br><span class="line"><span class="number">1</span>   <span class="number">3</span>   <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>输出: 9<br>解释: 小偷一晚能够盗取的最高金额 = 4 + 5 = 9.</p>
+</blockquote>
+<p>​    最后一种打家劫舍问题其实也不难，只不过转化了一下思路而已，之前是相邻两家房屋不能打劫，现在是相同相邻的两层房子不能打劫而已，所以我们的计算方法是一样的只不过是在计算每一层所能够打劫到的钱财时稍许复杂。</p>
+</li>
+<li><p><strong>代码实现</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Definition for a binary tree node.</span></span><br><span class="line"><span class="comment"> * public class TreeNode &#123;</span></span><br><span class="line"><span class="comment"> *     int val;</span></span><br><span class="line"><span class="comment"> *     TreeNode left;</span></span><br><span class="line"><span class="comment"> *     TreeNode right;</span></span><br><span class="line"><span class="comment"> *     TreeNode(int x) &#123; val = x; &#125;</span></span><br><span class="line"><span class="comment"> * &#125;</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="comment">//建立一个备忘录，用来记录打劫到某个节点的时候的最大钱数，以此来减少重复操作</span></span><br><span class="line">    Map&lt;TreeNode,Integer&gt;  map=<span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(TreeNode root)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(root==<span class="keyword">null</span>)&#123;<span class="keyword">return</span> <span class="number">0</span>;&#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(map.containsKey(root))&#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">return</span> map.get(root);</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//n-2层的最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_2=<span class="number">0</span>;</span><br><span class="line">        <span class="comment">//n-1层的最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_1=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//判断为null的情况</span></span><br><span class="line">        <span class="keyword">int</span> val=root==<span class="keyword">null</span>?<span class="number">0</span>:root.val;</span><br><span class="line">        <span class="keyword">int</span> temp=n_1;</span><br><span class="line">        <span class="comment">//这一层的加上下下层的最大钱数</span></span><br><span class="line">        n_1=Math.max(val+(root.left==<span class="keyword">null</span>?<span class="number">0</span>:(rob(root.left.left)+rob(root.left.right)))</span><br><span class="line">               +(root.right==<span class="keyword">null</span>?<span class="number">0</span>:(rob(root.right.left)+rob(root.right.right))),</span><br><span class="line">               rob(root.right)+rob(root.left));</span><br><span class="line">        n_2=temp;</span><br><span class="line">        map.put(root,n_1);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​</p>
+</li>
+</ul>
+
+  </div>
+
+</article>
+
+
+  <nav id="pagenavi">
+    
+    <a href="/2020/08/16/十大排序算法/" class="prev">上一篇：十大排序算法</a>
+    
+    
+    <a href="/2020/08/16/背包九讲/" class="next">下一篇：背包九讲</a>
+    
+  </nav>
+
+        </div>
+        
+        
+      </div>
+      <footer id="footer" class="inner">
+        © 2020 - TankyZhang -
+        <span id="busuanzi_container_site_pv">PV <span id="busuanzi_value_site_pv"></span></span>
+        <p>Powered by <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a> & <a href="https://github.com/thinkerchan/hexo-theme-greyshade" target="_blank" rel="noopener">GreyShade</a></p>
+      </footer>
+    </div>
+  </div>
+  
+  <script async defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+  
+  <script async defer src="https://s5.cnzz.com/z_stat.php?id=1276809529&web_id=1276809529"></script>
+  
+</body>
+</html>
