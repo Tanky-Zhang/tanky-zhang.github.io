@@ -14,7 +14,7 @@
     
     
     
-    <title>HashMap的源码 | 软件开发的小学生</title>
+    <title>HashMap的源码 | tanky | 软件开发的小学生</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     
     <meta name="theme-color" content="#5b5b5e">
@@ -25,7 +25,7 @@
 <meta property="og:type" content="article">
 <meta property="og:title" content="HashMap的源码">
 <meta property="og:url" content="http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/index.html">
-<meta property="og:site_name" content="软件开发的小学生">
+<meta property="og:site_name" content="tanky">
 <meta property="og:description" content="jdk8中的HashMap源码解析与理解一、预备知识关于hash： ​    有个非常关键的特点，不定长度的输入固定长度的输出，将一个对象经过一定的hash算法映射成相同长度的hash值。 hash冲突的避免： ​    hash是无法完全避免的，只能通过各种方法手段尽量的减少hash冲突。 关于hash碰撞的解决方案：  开放地址法：假设一个数组有四个长度此时存放了[8,null,10,11,n">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200704215356745.png">
@@ -414,7 +414,7 @@
 <div class="page-share" id="pageShare">
     <ul class="reset share-icons">
       <li>
-        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
+        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — tanky&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
           <i class="icon icon-weibo"></i>
         </a>
       </li>
@@ -424,7 +424,7 @@
         </a>
       </li>
       <li>
-        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&source=软件开发的小学生" data-title=" QQ">
+        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — tanky&source=" data-title=" QQ">
           <i class="icon icon-qq"></i>
         </a>
       </li>
@@ -434,7 +434,7 @@
         </a>
       </li>
       <li>
-        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《HashMap的源码》 — 软件开发的小学生&url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
+        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《HashMap的源码》 — tanky&url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
           <i class="icon icon-twitter"></i>
         </a>
       </li>
@@ -552,7 +552,7 @@
 <div class="global-share" id="globalShare">
     <ul class="reset share-icons">
       <li>
-        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
+        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — tanky&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
           <i class="icon icon-weibo"></i>
         </a>
       </li>
@@ -562,7 +562,7 @@
         </a>
       </li>
       <li>
-        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&source=软件开发的小学生" data-title=" QQ">
+        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — tanky&source=" data-title=" QQ">
           <i class="icon icon-qq"></i>
         </a>
       </li>
@@ -572,7 +572,7 @@
         </a>
       </li>
       <li>
-        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《HashMap的源码》 — 软件开发的小学生&url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
+        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《HashMap的源码》 — tanky&url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
           <i class="icon icon-twitter"></i>
         </a>
       </li>
