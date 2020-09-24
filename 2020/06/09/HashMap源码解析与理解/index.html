@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+
+    
+
+    
+
+
+
+    <meta charset="utf-8">
+    
+    
+    
+    
+    <title>HashMap的源码 | 软件开发的小学生</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    
+    <meta name="theme-color" content="#5b5b5e">
+    
+    
+    <meta name="keywords" content="">
+    <meta name="description" content="jdk8中的HashMap源码解析与理解一、预备知识关于hash： ​    有个非常关键的特点，不定长度的输入固定长度的输出，将一个对象经过一定的hash算法映射成相同长度的hash值。 hash冲突的避免： ​    hash是无法完全避免的，只能通过各种方法手段尽量的减少hash冲突。 关于hash碰撞的解决方案：  开放地址法：假设一个数组有四个长度此时存放了[8,null,10,11,n">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HashMap的源码">
+<meta property="og:url" content="http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/index.html">
+<meta property="og:site_name" content="软件开发的小学生">
+<meta property="og:description" content="jdk8中的HashMap源码解析与理解一、预备知识关于hash： ​    有个非常关键的特点，不定长度的输入固定长度的输出，将一个对象经过一定的hash算法映射成相同长度的hash值。 hash冲突的避免： ​    hash是无法完全避免的，只能通过各种方法手段尽量的减少hash冲突。 关于hash碰撞的解决方案：  开放地址法：假设一个数组有四个长度此时存放了[8,null,10,11,n">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200704215356745.png">
+<meta property="og:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200704220137606.png">
+<meta property="og:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200705000856653.png">
+<meta property="og:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200705001819146.png">
+<meta property="og:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200705002338847.png">
+<meta property="og:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200705095543390.png">
+<meta property="article:published_time" content="2020-06-08T16:00:00.000Z">
+<meta property="article:modified_time" content="2020-09-24T08:42:10.397Z">
+<meta property="article:author" content="TankyZhang">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="c:/Users/19697/AppData/Roaming/Typora/typora-user-images/image-20200704215356745.png">
+    
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="stylesheet" href="//unpkg.com/hexo-theme-material-indigo@latest/css/style.css">
+    <script>window.lazyScripts=[]</script>
+
+    <!-- custom head -->
+    
+
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+    <div id="loading" class="active"></div>
+
+    <aside id="menu" class="hide" >
+  <div class="inner flex-row-vertical">
+    <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
+        <i class="icon icon-lg icon-close"></i>
+    </a>
+    <div class="brand-wrap" style="background-image:url(/img/brand1.jpg)">
+      <div class="brand">
+        <a href="/" class="avatar waves-effect waves-circle waves-light">
+          <img src="/images/dog.jpg">
+        </a>
+        <hgroup class="introduce">
+          <h5 class="nickname">TankyZhang</h5>
+          <a href="mailto:1969751050@qq.com" title="1969751050@qq.com" class="mail">1969751050@qq.com</a>
+        </hgroup>
+      </div>
+    </div>
+    <div class="scroll-wrap flex-col">
+      <ul class="nav">
+        
+            <li class="waves-block waves-effect">
+              <a href="/"  >
+                <i class="icon icon-lg icon-home"></i>
+                主页
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="/archives"  >
+                <i class="icon icon-lg icon-archives"></i>
+                归档
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="/tags"  >
+                <i class="icon icon-lg icon-tags"></i>
+                标签
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="/categories"  >
+                <i class="icon icon-lg icon-th-list"></i>
+                分类
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="https://github.com/tanky-zhang" target="_blank" >
+                <i class="icon icon-lg icon-github"></i>
+                Github
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="http://www.weibo.com/tanky-zhang" target="_blank" >
+                <i class="icon icon-lg icon-weibo"></i>
+                Weibo
+              </a>
+            </li>
+        
+      </ul>
+    </div>
+  </div>
+</aside>
+
+    <main id="main">
+        <header class="top-header" id="header">
+    <div class="flex-row">
+        <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light on" id="menu-toggle">
+          <i class="icon icon-lg icon-navicon"></i>
+        </a>
+        <div class="flex-col header-title ellipsis">HashMap的源码</div>
+        
+        <div class="search-wrap" id="search-wrap">
+            <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="back">
+                <i class="icon icon-lg icon-chevron-left"></i>
+            </a>
+            <input type="text" id="key" class="search-input" autocomplete="off" placeholder="输入感兴趣的关键字">
+            <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="search">
+                <i class="icon icon-lg icon-search"></i>
+            </a>
+        </div>
+        
+        
+        <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="menuShare">
+            <i class="icon icon-lg icon-share-alt"></i>
+        </a>
+        
+    </div>
+</header>
+<header class="content-header post-header">
+
+    <div class="container fade-scale">
+        <h1 class="title">HashMap的源码</h1>
+        <h5 class="subtitle">
+            
+                <time datetime="2020-06-08T16:00:00.000Z" itemprop="datePublished" class="page-time">
+  2020-06-09
+</time>
+
+
+	<ul class="article-category-list"><li class="article-category-list-item"><a class="article-category-list-link" href="/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析</a></li></ul>
+
+            
+        </h5>
+    </div>
+
+    
+
+
+</header>
+
+
+<div class="container body-wrap">
+    
+    <aside class="post-widget">
+        <nav class="post-toc-wrap post-toc-shrink" id="post-toc">
+            <h4>TOC</h4>
+            <ol class="post-toc"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#jdk8中的HashMap源码解析与理解"><span class="post-toc-number">1.</span> <span class="post-toc-text">jdk8中的HashMap源码解析与理解</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-3"><a class="post-toc-link" href="#一、预备知识"><span class="post-toc-number">1.1.</span> <span class="post-toc-text">一、预备知识</span></a></li><li class="post-toc-item post-toc-level-3"><a class="post-toc-link" href="#二、jdk8相对jdk7对于hashmap有哪些改进"><span class="post-toc-number">1.2.</span> <span class="post-toc-text">二、jdk8相对jdk7对于hashmap有哪些改进</span></a></li><li class="post-toc-item post-toc-level-3"><a class="post-toc-link" href="#三、源码讲解"><span class="post-toc-number">1.3.</span> <span class="post-toc-text">三、源码讲解</span></a></li></ol></li></ol>
+        </nav>
+    </aside>
+
+
+<article id="post-HashMap源码解析与理解"
+  class="post-article article-type-post fade" itemprop="blogPost">
+
+    <div class="post-card">
+        <h1 class="post-card-title">HashMap的源码</h1>
+        <div class="post-meta">
+            <time class="post-time" title="2020-06-09 00:00:00" datetime="2020-06-08T16:00:00.000Z"  itemprop="datePublished">2020-06-09</time>
+
+            
+	<ul class="article-category-list"><li class="article-category-list-item"><a class="article-category-list-link" href="/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析</a></li></ul>
+
+
+
+            
+<span id="busuanzi_container_page_pv" title="文章总阅读量" style='display:none'>
+    <i class="icon icon-eye icon-pr"></i><span id="busuanzi_value_page_pv"></span>
+</span>
+
+
+        </div>
+        <div class="post-content" id="post-content" itemprop="postContent">
+            <h2 id="jdk8中的HashMap源码解析与理解"><a href="#jdk8中的HashMap源码解析与理解" class="headerlink" title="jdk8中的HashMap源码解析与理解"></a>jdk8中的HashMap源码解析与理解</h2><h3 id="一、预备知识"><a href="#一、预备知识" class="headerlink" title="一、预备知识"></a>一、预备知识</h3><p><strong>关于hash：</strong></p>
+<p>​    有个非常关键的特点，不定长度的输入固定长度的输出，将一个对象经过一定的hash算法映射成相同长度的hash值。</p>
+<p><strong>hash冲突的避免：</strong></p>
+<p>​    hash是无法完全避免的，只能通过各种方法手段尽量的减少hash冲突。</p>
+<p><strong>关于hash碰撞的解决方案：</strong></p>
+<ol>
+<li><p>开放地址法：假设一个数组有四个长度此时存放了[8,null,10,11,null]两个为null的位置代表没有数据，此时如果有个15来了，15mod 4=3那么这个15应该放在下标为3的位置上，但是3号位置有了数据，所以我们需要用（15+1）mod 4=4此时就放在了4位置，此时恰好没有数据，如果4位置有数据那么我们应该继续向下探测，即（15+1+1）mod 4得到对应的索引位置，直到找到可以放置的位置。</p>
+<ol start="2">
+<li>再hash法：再哈希法又叫双哈希法，有多个不同的Hash函数，当发生冲突时，使用第二个，第三个，….，等哈希函数<br>计算地址，直到无冲突。虽然不易发生聚集，但是增加了计算时间。</li>
+<li>链地址法：这个就是利用链表来实现，当发生hash冲突的时候我们将冲突的数据继续放在该位置，只不过要形成链表连接在这个位置的元素的后边。我们的hashmap就是利用这种方式来实现的hash冲突的解决。</li>
+<li>建立公共溢出区：将哈希表分为基本表和溢出表两部分，凡是和基本表发生冲突的元素，一律填入溢出表</li>
+</ol>
+</li>
+</ol>
+<h3 id="二、jdk8相对jdk7对于hashmap有哪些改进"><a href="#二、jdk8相对jdk7对于hashmap有哪些改进" class="headerlink" title="二、jdk8相对jdk7对于hashmap有哪些改进"></a>二、jdk8相对jdk7对于hashmap有哪些改进</h3><ol>
+<li><p>jdk8采用了数组+链表+红黑树的数据结构进行数据的存储，而jdk7中采用了数组+链表的处理方式</p>
+<ol start="2">
+<li>jdk8中将数据插入链表的时候采用的是尾插法，而jdk7采用的是头插法。</li>
+<li>jdk8中新增了一些新的特性，比如hashmap的foreach以及merge和replace方法</li>
+<li>jdk8中在扩容数据迁移的时候是采用的高低位链的形式进行，而jdk7则是采用的头尾倒置的方式进行迁移。</li>
+</ol>
+</li>
+</ol>
+<h3 id="三、源码讲解"><a href="#三、源码讲解" class="headerlink" title="三、源码讲解"></a>三、源码讲解</h3><p><strong>理解jdk8中的hashmap源码中几个重要的参数：</strong></p>
+<p>​    1. 加载因子：在hashmap中这个值默认是0.75。</p>
+<pre><code> 2. map容量：map的容量并不一定等于实际创建时写入的map的容量，因为hashmap的容量一定是2的n次方，所以当我们申请一个大小为13的map的时候在实际创建的时候会申请一个大小为16的map，也就是说找到第一个大于或者等于申请大小的2的n次方的数据。**但是尤其重要的是这个容量是没有参数的，他一开始是存储在扩容阈值的那个参数中的**
+ 3. 扩容阈值：加载因子*map的容量，假如map的容量为16加载因子为0.75那么扩容的阈值就是 $16\ast0.75 =12$ ，也就是说当map中存放的元素如果大于了12那么就需要进行扩容。
+ 4. 树化的阈值：在jdk8中当链表的长度大于了8以后会转为红黑树，这个8就是转为红黑树的阈值。</code></pre>
+<p><strong>hashmap中的key的hashcode是直接利用hashcode方法生成的吗？</strong></p>
+<p>​    这个地方不是直接用原生的hashcode方法生成的，而是随原生的hashcode方法进行搞16位异或低16位的扰动，举个例子，假设存放key=“nihao”，如图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200704215356745.png" alt="image-20200704215356745" title="">
+                </div>
+                <div class="image-caption">image-20200704215356745</div>
+            </figure>
+
+<p>我们按照源码中的计算过程如下图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200704220137606.png" alt="" title="">
+                </div>
+                <div class="image-caption"></div>
+            </figure>
+
+<p>通过这样得二次位扰动加工处理我们尽可能得避免了hash碰撞得发生，进一步降低hash冲突的几率。</p>
+<p>​    我们可以通过另外一个例子分析一下是如何降低得，假设我们得数组长度是16那么我们在进行取模运算得时候则是通过hashcode&amp;(16-1)这样得运算得到得索引值，如果我们得key为“abcabcabcabcabc”，我们得到如下:</p>
+<table>
+<thead>
+<tr>
+<th>1954974080（HashCode）</th>
+<th>111 0100 1000 0110 1000 1001 1000 0000</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2^4-1=15（length-1）</td>
+<td>000 0000 0000 0000 0000 0000 0000 1111</td>
+</tr>
+<tr>
+<td>&amp;运算</td>
+<td>000 0000 0000 0000 0000 0000 0000 0000</td>
+</tr>
+</tbody></table>
+<p>而加上高16位异或低16位的“扰动函数”后，结果如下：</p>
+<table>
+<thead>
+<tr>
+<th>原HashCode</th>
+<th>1954974080</th>
+<th>111 0100 1000 0110 1000 1001 1000 0000</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>(&gt;&gt;&gt;16)无符号右移16位</td>
+<td>29830</td>
+<td>000 0000 0000 0000 0111 0100 1000 0110</td>
+</tr>
+<tr>
+<td>^（异或）运算</td>
+<td>1955003654</td>
+<td>111 0100 1000 0110 1111 1101 0000 0110</td>
+</tr>
+<tr>
+<td>2^4-1=15（length-1）</td>
+<td>15</td>
+<td>000 0000 0000 0000 0000 0000 0000 1111</td>
+</tr>
+<tr>
+<td>&amp;（与）运算</td>
+<td>6</td>
+<td>000 0000 0000 0000 0000 0000 0000 0110</td>
+</tr>
+</tbody></table>
+<p>通过上边的例子我们可以得到，如果未进行扰动那么只要hashcode后四位为0那么无论前边28位如何变化得到的结果只会位0，但是进行扰动以后情况有所不同了，显然末尾变成了0110减少了碰撞几率。</p>
+<p><strong>hashMap中数组的创建和初始化是一开始进行的吗？</strong></p>
+<p>​    hashmap中的数组不是new的时候创建的，而是在第一次put的时候做的初始化使用懒加载的方式，节省了空间。如图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705000856653.png" alt="image-20200705000856653" title="">
+                </div>
+                <div class="image-caption">image-20200705000856653</div>
+            </figure>
+
+<p>第一次会走如图的红框部分，进去这个分支以后会执行resize()方法，在resize中会对数组进行初始化。</p>
+<p><strong>链表转为红黑树需要什么条件：</strong></p>
+<p>​    链表转为红黑树主要要满足两个条件，一个是链表的长度大于8，另外一个是数组的长度大于64这个我们可以看下源码中的表现：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705001819146.png" alt="image-20200705001819146" title="">
+                </div>
+                <div class="image-caption">image-20200705001819146</div>
+            </figure>
+
+<p>在上图的程序中binCount表示了链表的长度，我们可以看到当bitcount&gt;=7的时候会执行treeifyBin()这个方法，既然是7为什么我们说大于8呢，这是因为bitCount等于7的时候我们其实已经循环了8次因为数组从0开始的，并且我们的p.next = newNode(hash, key, value, null);这段代码先执行也就是说先挂了一个node上去然后去判断的，所以此时除了根节点以外的长度是8而我们加上根节点，长度就变为了9，所以当大于8才会转为执行treeifyBin()这个方法，数组长度大于64又是从哪里体现呢，这个就在treeifyBin()方法中了，如图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705002338847.png" alt="" title="">
+                </div>
+                <div class="image-caption"></div>
+            </figure>
+
+<p>此时我们可以看出当数组的长度小于64的时候会执行resize()操作进行二倍扩容。</p>
+<p><strong>为什么转为红黑树的链表长度要大于8？</strong></p>
+<p>​    因为这是根据一个理论基础叫泊松分布，泊松分布用于描述单位时间（或空间）内随机事件发生的次数。我们可以看到jdk源码中有这么一段注释</p>
+<blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">Because TreeNodes are about twice the size of regular nodes, we</span><br><span class="line">use them only when bins contain enough nodes to warrant use</span><br><span class="line">(see TREEIFY_THRESHOLD). <span class="function">And when they become too <span class="title">small</span> <span class="params">(due to</span></span></span><br><span class="line"><span class="function"><span class="params">removal or resizing)</span> they are converted back to plain bins.  In</span></span><br><span class="line"><span class="function">usages with well-distributed user hashCodes, tree bins are</span></span><br><span class="line"><span class="function">rarely used.  Ideally, under random hashCodes, the frequency of</span></span><br><span class="line"><span class="function">nodes in bins follows a Poisson distribution</span></span><br><span class="line"><span class="function"><span class="params">(http://en.wikipedia.org/wiki/Poisson_distribution)</span> with a</span></span><br><span class="line"><span class="function">parameter of about 0.5 on average <span class="keyword">for</span> the <span class="keyword">default</span> resizing</span></span><br><span class="line"><span class="function">threshold of 0.75, although with a large variance because of</span></span><br><span class="line"><span class="function">resizing granularity. Ignoring variance, the expected</span></span><br><span class="line"><span class="function">occurrences of list size k <span class="title">are</span> <span class="params">(exp(<span class="number">-0.5</span>)</span> * <span class="title">pow</span><span class="params">(<span class="number">0.5</span>, k)</span> /</span></span><br><span class="line"><span class="function"><span class="title">factorial</span><span class="params">(k)</span>). The first values are:</span></span><br><span class="line"><span class="function">0:    0.60653066</span></span><br><span class="line"><span class="function">1:    0.30326533</span></span><br><span class="line"><span class="function">2:    0.07581633</span></span><br><span class="line"><span class="function">3:    0.01263606</span></span><br><span class="line"><span class="function">4:    0.00157952</span></span><br><span class="line"><span class="function">5:    0.00015795</span></span><br><span class="line"><span class="function">6:    0.00001316</span></span><br><span class="line"><span class="function">7:    0.00000094</span></span><br><span class="line"><span class="function">8:    0.00000006</span></span><br><span class="line"><span class="function">more: less than 1 in ten million</span></span><br></pre></td></tr></table></figure>
+</blockquote>
+<p>通过上面的讲述我们发现其实链表在加载因子位0.75的情况发生树化的概率仅为0.00000006这个概率是极为低下的，也就是说在大多数的情况下我们的链表都不会转为红黑树。</p>
+<p>​    通常如果 hash 算法正常的话，那么链表的长度也不会很长，那么红黑树也不会带来明显的查询时间上的优势，反而会增加空间负担。所以通常情况下，并没有必要转为红黑树，所以就选择了概率非常小，小于千万分之一概率，也就是长度为 8 的概率，把长度 8 作为转化的默认阈值。</p>
+<p>​    所以如果平时开发中发现 HashMap 或是 ConcurrentHashMap 内部出现了红黑树的结构，这个时候往往就说明我们的哈希算法出了问题，需要留意是不是我们实现了效果不好的 hashCode 方法，并对此进行改进，以便减少冲突。</p>
+<p><strong>为什么要采用链表转为红黑树的方式进行存储？</strong></p>
+<p>​    为了提高查询的性能，正常情况下如果我们要查询的数据在链表的最后边那么我们需要从前向后的依次进行遍历，直到找到对应元素，这样的话我们的时间复杂度便是o(n),但是我们如果采用了红黑树这种结果的话，他是一种近似平衡二叉树，也就是左节点要比根节点小，右子节点比根节点大，所以此时的查找的时间复杂度位O(logn)。</p>
+<p><strong>分析hashmap的put操作流程</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">final</span> V <span class="title">putVal</span><span class="params">(<span class="keyword">int</span> hash, K key, V value, <span class="keyword">boolean</span> onlyIfAbsent, <span class="keyword">boolean</span> evict)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    Node&lt;K,V&gt;[] tab;</span><br><span class="line">    Node&lt;K,V&gt; p;</span><br><span class="line">    <span class="keyword">int</span> n, i;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//第一次put的时候table为null</span></span><br><span class="line">    <span class="keyword">if</span> ((tab = table) == <span class="keyword">null</span> || (n = tab.length) == <span class="number">0</span>)</span><br><span class="line">        n = (tab = resize()).length;</span><br><span class="line">    <span class="comment">//这个if分支代表当前的这个索引位置的元素为null 其实可以直接放入。</span></span><br><span class="line">    <span class="keyword">if</span> ((p = tab[i = (n - <span class="number">1</span>) &amp; hash]) == <span class="keyword">null</span>)</span><br><span class="line">        tab[i] = newNode(hash, key, value, <span class="keyword">null</span>);</span><br><span class="line">    <span class="comment">//如果不为null则需要使用头插法放在链表中</span></span><br><span class="line">    <span class="keyword">else</span> &#123;</span><br><span class="line">        Node&lt;K,V&gt; e; K k;</span><br><span class="line">        <span class="comment">//第一个分支意味着新增的key原先就存在，所以直接替换</span></span><br><span class="line">        <span class="keyword">if</span> (p.hash == hash &amp;&amp; ((k = p.key) == key || (key != <span class="keyword">null</span> &amp;&amp; key.equals(k))))</span><br><span class="line">            e = p;</span><br><span class="line">        <span class="comment">//这个分支意味着此时已经是一个红黑树的节点  也就是说链表长度已经大于了8</span></span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (p <span class="keyword">instanceof</span> TreeNode)</span><br><span class="line">            e = ((TreeNode&lt;K,V&gt;)p).putTreeVal(<span class="keyword">this</span>, tab, hash, key, value);</span><br><span class="line">        <span class="comment">//最后分支意味着普通情况的放入</span></span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> binCount = <span class="number">0</span>; ; ++binCount) &#123;</span><br><span class="line">                <span class="comment">//如果当前的索引位置的节点的下一个节点为null证明可以直接放入到下一个节点</span></span><br><span class="line">                <span class="keyword">if</span> ((e = p.next) == <span class="keyword">null</span>) &#123;</span><br><span class="line">                    p.next = newNode(hash, key, value, <span class="keyword">null</span>);</span><br><span class="line">                    <span class="keyword">if</span> (binCount &gt;= TREEIFY_THRESHOLD - <span class="number">1</span>) <span class="comment">// -1 for 1st</span></span><br><span class="line">                        <span class="comment">//判断转化为红黑树</span></span><br><span class="line">                        treeifyBin(tab, hash);</span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">if</span> (e.hash == hash &amp;&amp; ((k = e.key) == key || (key != <span class="keyword">null</span> &amp;&amp; key.equals(k))))</span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                p = e;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (e != <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="comment">// existing mapping for key</span></span><br><span class="line">            V oldValue = e.value;</span><br><span class="line">            <span class="keyword">if</span> (!onlyIfAbsent || oldValue == <span class="keyword">null</span>)</span><br><span class="line">                e.value = value;</span><br><span class="line">            afterNodeAccess(e);</span><br><span class="line">            <span class="keyword">return</span> oldValue;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    ++modCount;</span><br><span class="line">    <span class="comment">//这里就是判断是否需要扩容   看的是size是否大于扩容的容量</span></span><br><span class="line">    <span class="keyword">if</span> (++size &gt; threshold)</span><br><span class="line">        resize();</span><br><span class="line">    afterNodeInsertion(evict);</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们通过看源码不难看出put操作首先判断数组是不是null如果是null那么就进行初始化，初始化结束其实就分了四种情况，第一种就是需要放置的索引位置为null可以直接放置数据，第二种情况就是新增的key原先就存在需要直接替换，第三种情况就是他已经树化是一个红黑树，第四种情况就是正常的put操作，进行头插尾插法插入。</p>
+<blockquote>
+<p>注意：jdk1.7的时候是头插法，jdk1.8以后是尾插法插入。</p>
+</blockquote>
+<p>​    第一种直接放入元素即可，第二种情况就是判断hash值相同且key值相等，那么就是需要直接替换了，第四种情况就是在我们put的时候我们需要关注是否需要树化，即转为红黑树，我们在上边已经分析过转为红黑树的时机了，在遍历链表的时候同时也判断了是否需要替换相同的key。等到插入完成以后我们来判断是否达到了扩容的标准，即size是否大于threshold这个seize是个全局变量是实际放入到map中的数据量。</p>
+<p><strong>hashmap的扩容（resize）解析</strong></p>
+<p>​    当达到扩容阈值的时候会进行扩容操作，也就是执行resize()方法，代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> Node&lt;K,V&gt;[] resize() &#123;</span><br><span class="line"></span><br><span class="line">    Node&lt;K,V&gt;[] oldTab = table;</span><br><span class="line">    <span class="comment">//旧的数组的长度  第一次put为0</span></span><br><span class="line">    <span class="keyword">int</span> oldCap = (oldTab == <span class="keyword">null</span>) ? <span class="number">0</span> : oldTab.length;</span><br><span class="line">    <span class="comment">//阈值</span></span><br><span class="line">    <span class="keyword">int</span> oldThr = threshold;</span><br><span class="line">    <span class="comment">//newThr代表了新的扩容阈值</span></span><br><span class="line">    <span class="keyword">int</span> newCap, newThr = <span class="number">0</span>;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> (oldCap &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (oldCap &gt;= MAXIMUM_CAPACITY) &#123;</span><br><span class="line">            threshold = Integer.MAX_VALUE;</span><br><span class="line">            <span class="keyword">return</span> oldTab;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> ((newCap = oldCap &lt;&lt; <span class="number">1</span>) &lt; MAXIMUM_CAPACITY &amp;&amp;</span><br><span class="line">                 oldCap &gt;= DEFAULT_INITIAL_CAPACITY)</span><br><span class="line">            <span class="comment">//oldThr*2  这就是真正扩容的大小每次扩容两倍</span></span><br><span class="line">            newThr = oldThr &lt;&lt; <span class="number">1</span>; <span class="comment">// double threshold</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (oldThr &gt; <span class="number">0</span>)</span><br><span class="line">        <span class="comment">//如果第一次执行会走入这个方法</span></span><br><span class="line">        newCap = oldThr;</span><br><span class="line">    <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// zero initial threshold signifies using defaults</span></span><br><span class="line">        newCap = DEFAULT_INITIAL_CAPACITY;</span><br><span class="line">        newThr = (<span class="keyword">int</span>)(DEFAULT_LOAD_FACTOR * DEFAULT_INITIAL_CAPACITY);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (newThr == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="comment">//第一次执行会走入这个分支  这里就是加载因子*数组的实际大小</span></span><br><span class="line">        <span class="keyword">float</span> ft = (<span class="keyword">float</span>)newCap * loadFactor;</span><br><span class="line">        newThr = (newCap &lt; MAXIMUM_CAPACITY &amp;&amp; ft &lt; (<span class="keyword">float</span>)MAXIMUM_CAPACITY ?</span><br><span class="line">                  (<span class="keyword">int</span>)ft : Integer.MAX_VALUE);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果第一次执行才开始对threshold进行初始化</span></span><br><span class="line">    threshold = newThr;</span><br><span class="line">    <span class="meta">@SuppressWarnings</span>(&#123;<span class="string">"rawtypes"</span>,<span class="string">"unchecked"</span>&#125;)</span><br><span class="line">    Node&lt;K,V&gt;[] newTab = (Node&lt;K,V&gt;[])<span class="keyword">new</span> Node[newCap];</span><br><span class="line">    <span class="comment">//才开始对数组进行初始化</span></span><br><span class="line">    table = newTab;</span><br><span class="line">    <span class="comment">//这里这个分支意味着不是第一次执行put  因为当是第一次执行put的时候此时oldTab为null</span></span><br><span class="line">    <span class="keyword">if</span> (oldTab != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; oldCap; ++j) &#123;</span><br><span class="line">            Node&lt;K,V&gt; e;</span><br><span class="line">            <span class="keyword">if</span> ((e = oldTab[j]) != <span class="keyword">null</span>) &#123;</span><br><span class="line">                oldTab[j] = <span class="keyword">null</span>;</span><br><span class="line">                <span class="keyword">if</span> (e.next == <span class="keyword">null</span>)</span><br><span class="line">                    newTab[e.hash &amp; (newCap - <span class="number">1</span>)] = e;</span><br><span class="line">                <span class="keyword">else</span> <span class="keyword">if</span> (e <span class="keyword">instanceof</span> TreeNode)</span><br><span class="line">                    ((TreeNode&lt;K,V&gt;)e).split(<span class="keyword">this</span>, newTab, j, oldCap);</span><br><span class="line">                <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">// preserve order</span></span><br><span class="line">                    Node&lt;K,V&gt; loHead = <span class="keyword">null</span>, loTail = <span class="keyword">null</span>;</span><br><span class="line">                    Node&lt;K,V&gt; hiHead = <span class="keyword">null</span>, hiTail = <span class="keyword">null</span>;</span><br><span class="line">                    Node&lt;K,V&gt; next;</span><br><span class="line">                    <span class="keyword">do</span> &#123;</span><br><span class="line">                        next = e.next;</span><br><span class="line">                        <span class="comment">//索引位置没有变</span></span><br><span class="line">                        <span class="keyword">if</span> ((e.hash &amp; oldCap) == <span class="number">0</span>) &#123;</span><br><span class="line">                            <span class="keyword">if</span> (loTail == <span class="keyword">null</span>)</span><br><span class="line">                                loHead = e;</span><br><span class="line">                            <span class="keyword">else</span></span><br><span class="line">                                loTail.next = e;</span><br><span class="line">                            loTail = e;</span><br><span class="line">                        &#125;</span><br><span class="line">                        <span class="keyword">else</span> &#123;</span><br><span class="line">                            <span class="keyword">if</span> (hiTail == <span class="keyword">null</span>)</span><br><span class="line">                                hiHead = e;</span><br><span class="line">                            <span class="keyword">else</span></span><br><span class="line">                                hiTail.next = e;</span><br><span class="line">                            hiTail = e;</span><br><span class="line">                        &#125;</span><br><span class="line">                    &#125; <span class="keyword">while</span> ((e = next) != <span class="keyword">null</span>);</span><br><span class="line">                    <span class="keyword">if</span> (loTail != <span class="keyword">null</span>) &#123;</span><br><span class="line">                        loTail.next = <span class="keyword">null</span>;</span><br><span class="line">                        newTab[j] = loHead;</span><br><span class="line">                    &#125;</span><br><span class="line">                    <span class="keyword">if</span> (hiTail != <span class="keyword">null</span>) &#123;</span><br><span class="line">                        hiTail.next = <span class="keyword">null</span>;</span><br><span class="line">                        newTab[j + oldCap] = hiHead;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> newTab;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    扩容的时候一开始要计算新的map容量以及新的扩容阈值，在计算两者的时候分了两种情况，一种就是数组还没有进行初始化，第二种就是原先已经有数据了，如果没有进行初始化就让新的数组的容量等于扩容阈值， newCap = oldThr为什么会是这样呢，因为这里有个小细节那就是hashmap没有容量这个属性，一开始初始化之前是把容量大小计算以后赋值给了阈值这个字段，初始化第一次以后阈值字段存储的才是真正的阈值即执行了 newThr = (newCap &lt; MAXIMUM_CAPACITY &amp;&amp; ft &lt; (float)MAXIMUM_CAPACITY  ?  (int)ft : Integer.MAX_VALUE)。如果进行了初始化那就很明确了就是将原先的容量左移一位同时将阈值字段左移一位。采用位移的方式进行计算是因为乘法运算最终还是会转为位移运算。</p>
+<p>​    第一步计算扩容后的容量以及阈值以后开始进行数据的迁移工作，即将老数组中的数据迁移到新数组中去。在迁移过程中又分为了四种情况，第一种情况就是当前的索引位置的数据为null这种情况我们可以就不做处理，第二种情况就是当前索引位置只有一个数据，没有形成链表，此时我们直接将这个数据迁移到新的数组的位置就可以了。第三种情况就是迁移的数据已经树化形成了红黑树。第四种情况就是普通没有树化的情况。</p>
+<p>​    第四种情况是如何扩容的，如果是普通的链表没有树化的情况下是将链表分为了两部分（高位链、低位链），这个关于高位链和低位链我们来分析一下，假如我们一开始的数组大小为16后来扩容成32，并且我们又两个key（key1，key2）如图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705095543390.png" alt="" title="">
+                </div>
+                <div class="image-caption"></div>
+            </figure>
+
+<p>我们发现当我们在利用位运算取模进行索引值计算的时候如果是16我们会与15（1111）进行与运算这样另外的28位的高位无论是什么值都会是0，也就是索引只去取决于低四位。如果是32那么我们会与31（1 1111）进行与运算，此时的高27位无论是什么值都不有影响，我们发现从16到32其实就是多了一位的取决因素，多的这一位恰好就是十进制的16，所以我们不难想到我们将hash值与原有的容量进行与运算即key.hash&amp;10000如果结果为0则意味着key.hash的第五位上是0不会因为扩容被干扰到所以就会放在低位链里边，但是如果不是0那么意味着会被扩容干扰到索引位置，需要放入到高位链中。通过这样区分了高位链和低位链以后我们将低位链放在新数组的原先位置，高位链放在新数组的原索引加上老数组的容量的位置，以此来摒弃了jdk7的倒置的扩容方式，有效的防止了环链的形成。</p>
+<p>​    第三种情况如果是红黑树的情况下是如何扩容的，我们看下代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">void</span> <span class="title">split</span><span class="params">(HashMap&lt;K,V&gt; map, Node&lt;K,V&gt;[] tab, <span class="keyword">int</span> index, <span class="keyword">int</span> bit)</span> </span>&#123;</span><br><span class="line">    TreeNode&lt;K,V&gt; b = <span class="keyword">this</span>;</span><br><span class="line">    <span class="comment">// Relink into lo and hi lists, preserving order</span></span><br><span class="line">    TreeNode&lt;K,V&gt; loHead = <span class="keyword">null</span>, loTail = <span class="keyword">null</span>;</span><br><span class="line">    TreeNode&lt;K,V&gt; hiHead = <span class="keyword">null</span>, hiTail = <span class="keyword">null</span>;</span><br><span class="line">    <span class="keyword">int</span> lc = <span class="number">0</span>, hc = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (TreeNode&lt;K,V&gt; e = b, next; e != <span class="keyword">null</span>; e = next) &#123;</span><br><span class="line">        next = (TreeNode&lt;K,V&gt;)e.next;</span><br><span class="line">        e.next = <span class="keyword">null</span>;</span><br><span class="line">        <span class="keyword">if</span> ((e.hash &amp; bit) == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">if</span> ((e.prev = loTail) == <span class="keyword">null</span>)</span><br><span class="line">                loHead = e;</span><br><span class="line">            <span class="keyword">else</span></span><br><span class="line">                loTail.next = e;</span><br><span class="line">            loTail = e;</span><br><span class="line">            ++lc;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> ((e.prev = hiTail) == <span class="keyword">null</span>)</span><br><span class="line">                hiHead = e;</span><br><span class="line">            <span class="keyword">else</span></span><br><span class="line">                hiTail.next = e;</span><br><span class="line">            hiTail = e;</span><br><span class="line">            ++hc;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (loHead != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (lc &lt;= UNTREEIFY_THRESHOLD)</span><br><span class="line">            tab[index] = loHead.untreeify(map);</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            tab[index] = loHead;</span><br><span class="line">            <span class="keyword">if</span> (hiHead != <span class="keyword">null</span>) <span class="comment">// (else is already treeified)</span></span><br><span class="line">                loHead.treeify(tab);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (hiHead != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (hc &lt;= UNTREEIFY_THRESHOLD)</span><br><span class="line">            tab[index + bit] = hiHead.untreeify(map);</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            tab[index + bit] = hiHead;</span><br><span class="line">            <span class="keyword">if</span> (loHead != <span class="keyword">null</span>)</span><br><span class="line">                hiHead.treeify(tab);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们可以看出其实在已经树化的链表中其实还是有一个链表存在的，这个链表是为了由树退化成链做出的重要操作，所以我们需要维护这个链表，这个链表的维护方式和上边提到的是一样的都是分为高位链和低位链然后进行迁移，迁移完成以后判断对应链表的长度，如果长度小于等于了6就退化成链表，否则继续重新树化链表形成红黑树。</p>
+<p><strong>产生的并发问题分析：</strong></p>
+<p>因为hashmap线程不安全所以会产生一系列的并发问题，它主要会产生以下的几个问题：</p>
+<ol>
+<li><p>get的时候死锁（形成了环链导致的 jdk8有效的避免了这个问题）。</p>
+<ol start="2">
+<li>数据丢失问题：如果多个线程同时操作一个槽位那么就会出现数据覆盖丢失的问题。</li>
+<li>put非null的数据get为null：具体看jdk7中的transfer方法。</li>
+</ol>
+</li>
+</ol>
+
+        </div>
+
+        <blockquote class="post-copyright">
+    
+    <div class="content">
+        
+<span class="post-time">
+    最后更新时间：<time datetime="2020-09-24T08:42:10.397Z" itemprop="dateUpdated">2020-09-24 16:42:10</time>
+</span><br>
+
+
+        
+        这里可以写作者留言，标签和 hexo 中所有变量及辅助函数等均可调用，示例：<a href="/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/" target="_blank" rel="external">http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/</a>
+        
+    </div>
+    
+    <footer>
+        <a href="http://yoursite.com">
+            <img src="/images/dog.jpg" alt="TankyZhang">
+            TankyZhang
+        </a>
+    </footer>
+</blockquote>
+
+        
+<div class="page-reward">
+    <a id="rewardBtn" href="javascript:;" class="page-reward-btn waves-effect waves-circle waves-light">赏</a>
+</div>
+
+
+
+        <div class="post-footer">
+            
+
+            
+<div class="page-share-wrap">
+    
+
+<div class="page-share" id="pageShare">
+    <ul class="reset share-icons">
+      <li>
+        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
+          <i class="icon icon-weibo"></i>
+        </a>
+      </li>
+      <li>
+        <a class="weixin share-sns wxFab" href="javascript:;" data-title="微信">
+          <i class="icon icon-weixin"></i>
+        </a>
+      </li>
+      <li>
+        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&source=软件开发的小学生" data-title=" QQ">
+          <i class="icon icon-qq"></i>
+        </a>
+      </li>
+      <li>
+        <a class="facebook share-sns" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/" data-title=" Facebook">
+          <i class="icon icon-facebook"></i>
+        </a>
+      </li>
+      <li>
+        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《HashMap的源码》 — 软件开发的小学生&url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
+          <i class="icon icon-twitter"></i>
+        </a>
+      </li>
+      <li>
+        <a class="google share-sns" target="_blank" href="https://plus.google.com/share?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/" data-title=" Google+">
+          <i class="icon icon-google-plus"></i>
+        </a>
+      </li>
+    </ul>
+ </div>
+
+
+
+    <a href="javascript:;" id="shareFab" class="page-share-fab waves-effect waves-circle">
+        <i class="icon icon-share-alt icon-lg"></i>
+    </a>
+</div>
+
+
+
+        </div>
+    </div>
+
+    
+<nav class="post-nav flex-row flex-justify-between">
+  
+    <div class="waves-block waves-effect prev">
+      <a href="/2020/06/09/%E4%B8%89%E7%A7%8D%E6%89%93%E5%AE%B6%E5%8A%AB%E8%88%8D%E9%97%AE%E9%A2%98%E8%A7%A3%E6%9E%90/" id="post-prev" class="post-nav-link">
+        <div class="tips"><i class="icon icon-angle-left icon-lg icon-pr"></i> Prev</div>
+        <h4 class="title">打家劫舍</h4>
+      </a>
+    </div>
+  
+
+  
+    <div class="waves-block waves-effect next">
+      <a href="/2020/06/09/%E4%B8%8D%E5%90%8C%E7%9A%84%E4%BA%8C%E5%8F%89%E6%90%9C%E7%B4%A2%E6%A0%91%EF%BC%8896%E9%A2%98%EF%BC%89/" id="post-next" class="post-nav-link">
+        <div class="tips">Next <i class="icon icon-angle-right icon-lg icon-pl"></i></div>
+        <h4 class="title">二叉搜索树</h4>
+      </a>
+    </div>
+  
+</nav>
+
+
+
+    
+
+</article>
+
+<div id="reward" class="page-modal reward-lay">
+    <a class="close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <h3 class="reward-title">
+        <i class="icon icon-quote-left"></i>
+        谢谢大爷~
+        <i class="icon icon-quote-right"></i>
+    </h3>
+    <div class="reward-content">
+        
+        <div class="reward-code">
+            <img id="rewardCode" src="/img/wechat.jpg" alt="打赏二维码">
+        </div>
+        
+        <label class="reward-toggle">
+            <input id="rewardToggle" type="checkbox" class="reward-toggle-check"
+                data-wechat="/img/wechat.jpg" data-alipay="/img/alipay.jpg">
+            <div class="reward-toggle-ctrol">
+                <span class="reward-toggle-item wechat">微信</span>
+                <span class="reward-toggle-label"></span>
+                <span class="reward-toggle-item alipay">支付宝</span>
+            </div>
+        </label>
+        
+    </div>
+</div>
+
+
+
+</div>
+
+        <footer class="footer">
+    <div class="top">
+        
+<p>
+    <span id="busuanzi_container_site_uv" style='display:none'>
+        站点总访客数：<span id="busuanzi_value_site_uv"></span>
+    </span>
+    <span id="busuanzi_container_site_pv" style='display:none'>
+        站点总访问量：<span id="busuanzi_value_site_pv"></span>
+    </span>
+</p>
+
+
+        <p>
+            
+            <span>博客内容遵循 <a rel="license noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank">知识共享 署名 - 非商业性 - 相同方式共享 4.0 国际协议</a></span>
+        </p>
+    </div>
+    <div class="bottom">
+        <p><span>TankyZhang &copy; 2015 - 2020</span>
+            <span>
+                
+                Power by <a href="http://hexo.io/" target="_blank">Hexo</a> Theme <a href="https://github.com/yscoder/hexo-theme-indigo" target="_blank">indigo</a>
+            </span>
+        </p>
+    </div>
+</footer>
+
+    </main>
+    <div class="mask" id="mask"></div>
+<a href="javascript:;" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
+
+
+
+<div class="global-share" id="globalShare">
+    <ul class="reset share-icons">
+      <li>
+        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
+          <i class="icon icon-weibo"></i>
+        </a>
+      </li>
+      <li>
+        <a class="weixin share-sns wxFab" href="javascript:;" data-title="微信">
+          <i class="icon icon-weixin"></i>
+        </a>
+      </li>
+      <li>
+        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&title=《HashMap的源码》 — 软件开发的小学生&source=软件开发的小学生" data-title=" QQ">
+          <i class="icon icon-qq"></i>
+        </a>
+      </li>
+      <li>
+        <a class="facebook share-sns" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/" data-title=" Facebook">
+          <i class="icon icon-facebook"></i>
+        </a>
+      </li>
+      <li>
+        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《HashMap的源码》 — 软件开发的小学生&url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
+          <i class="icon icon-twitter"></i>
+        </a>
+      </li>
+      <li>
+        <a class="google share-sns" target="_blank" href="https://plus.google.com/share?url=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/" data-title=" Google+">
+          <i class="icon icon-google-plus"></i>
+        </a>
+      </li>
+    </ul>
+ </div>
+
+
+<div class="page-modal wx-share" id="wxShare">
+    <a class="close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <img src="//api.qrserver.com/v1/create-qr-code/?data=http://yoursite.com/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/" alt="微信分享二维码">
+</div>
+
+
+
+
+    <script src="//cdn.bootcss.com/node-waves/0.7.4/waves.min.js"></script>
+<script>
+var BLOG = { ROOT: '/', SHARE: true, REWARD: true };
+
+
+</script>
+
+<script src="//unpkg.com/hexo-theme-material-indigo@latest/js/main.min.js"></script>
+
+
+<div class="search-panel" id="search-panel">
+    <ul class="search-result" id="search-result"></ul>
+</div>
+<template id="search-tpl">
+<li class="item">
+    <a href="{path}" class="waves-block waves-effect">
+        <div class="title ellipsis" title="{title}">{title}</div>
+        <div class="flex-row flex-middle">
+            <div class="tags ellipsis">
+                {tags}
+            </div>
+            <time class="flex-col time">{date}</time>
+        </div>
+    </a>
+</li>
+</template>
+
+<script src="//unpkg.com/hexo-theme-material-indigo@latest/js/search.min.js" async></script>
+
+
+
+
+
+
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+<script>
+(function() {
+    var OriginTitile = document.title, titleTime;
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            document.title = '死鬼去哪里了！';
+            clearTimeout(titleTime);
+        } else {
+            document.title = '(つェ⊂)咦!又好了!';
+            titleTime = setTimeout(function() {
+                document.title = OriginTitile;
+            },2000);
+        }
+    });
+})();
+</script>
+
+
+
+</body>
+</html>

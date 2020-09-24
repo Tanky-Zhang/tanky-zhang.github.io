@@ -1,10 +1,193 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>源码分析</title>
-    <url>/2020/08/16/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/</url>
-    <content><![CDATA[<h2 id="jdk8中的HashMap源码解析与理解"><a href="#jdk8中的HashMap源码解析与理解" class="headerlink" title="jdk8中的HashMap源码解析与理解"></a>jdk8中的HashMap源码解析与理解</h2><p>###一、预备知识</p>
-<p><strong>关于hash：</strong></p>
+    <title>mysql的mvcc</title>
+    <url>/2020/09/24/Mysql%E4%B8%AD%E7%9A%84MVCC%EF%BC%88%E5%A4%9A%E7%89%88%E6%9C%AC%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6%EF%BC%89/</url>
+    <content><![CDATA[<h2 id="Mysql中的MVCC（多版本并发控制）"><a href="#Mysql中的MVCC（多版本并发控制）" class="headerlink" title="Mysql中的MVCC（多版本并发控制）"></a>Mysql中的MVCC（多版本并发控制）</h2><p>Mysql中的MVCC是一个特别难以理解的点，在讲述mvcc之前我们先来简单介绍关于数据库的事务的一点相关知识。</p>
+<p><strong>数据库的事务的特性：</strong></p>
+<ol>
+<li>原子性：每个事务都是不可分割的最小执行单位。</li>
+<li>隔离性：每个事务之间是相互隔离互不影响的。</li>
+<li>一致性：在一个事务中的操作要么全部成功要么全部失败。</li>
+<li>持久性：一旦事务结束，执行的结果是持久的。</li>
+</ol>
+<p><strong>事务的隔离级别：</strong></p>
+<ol>
+<li>读未提交：一个事务读取到另外一个事务还没有提交的结果。</li>
+<li>读已提交：一个事务只会读到另外一个事务提交的结果。（Oracle默认的隔离级别）</li>
+<li>可重复读：在一个事务中第一次读取一个数据的结果和后边读取这个数据的结果是一致的。（mysql默认的隔离级别）</li>
+<li>串行化：所有的事务都是串行执行的，不存在并行的情况。</li>
+</ol>
+<p>在上边介绍的四种隔离级别中第一种隔离级别很明显是不对的，最后一种很明显是效率底下的，所以在我们的mysql中基本上不会使用第一种和第四种隔离级别，所以我们接下来主要讨论第二种和第三种隔离级别。我们说到这两种隔离级别以后那么这两种隔离级别是如何实现的，在mysql中其实他就是借助于我们的MVCC来实现的这两种隔离级别。MVCC有两个特别重要的概念就是版本链和readview视图。</p>
+<p><strong>版本链：</strong></p>
+<p>​    对于使用InnoDB存储引擎的表来说，它的聚簇索引记录中都包含两个必要的隐藏列（row_id并不是必要的，我们 创建的表中有主键或者非NULL唯一键时都不会包含row_id列）</p>
+<ul>
+<li>trx_id：每次对某条记录进行改动时，都会把对应的事务id赋值给trx_id隐藏列。 </li>
+<li>roll_pointer：每次对某条记录进行改动时，这个隐藏列会存一个指针，可以通过这个指针找到该记 录修改前的信息。</li>
+</ul>
+<p>每个trx_id代表了一个事务，每个rollpointer则指向了当前事务的上一个事务。我们如果有一张user表如图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703211103307.png" alt="" title="">
+                </div>
+                <div class="image-caption"></div>
+            </figure>
+
+<p>​    </p>
+<p>​    图中我们用红色表示已经commit的事务，用绿色表示还没有提交的事务，最开始只有最下边的98号事务并且他是已经提交的，但是当99号事务开始的时候，就会讲roll_pointer指针指向98号事务并且将98号事务的数据放入undo日志中，以方便回滚。此时又来了一个100号事务执行了更新操作，把张三2改为张三3此时100号事务的roll_pointer指向99号事务的数据。同时100号事务没有结束，他又更新了一遍这条数据，此时将张三3改为了张三4，同理他的指针指向了之前的100号事务，此时又来了101号事务对事务进行了更新，指向了之前的100号事务。以上便构成了我们的版本链。</p>
+<p><strong>ReadView:</strong></p>
+<p>ReadView中主要包含4个比较重要的内容： </p>
+<ol>
+<li>m_ids：表示在生成ReadView时当前系统中活跃的读写事务的事务id列表。 </li>
+<li>min_trx_id：表示在生成ReadView时当前系统中活跃的读写事务中最小的事务id，也就是m_ids中的最小 值。 </li>
+<li>max_trx_id：表示生成ReadView时系统中应该分配给下一个事务的id值。 </li>
+<li>creator_trx_id：表示生成该ReadView的事务的事务id</li>
+</ol>
+<blockquote>
+<p>注意:max_trx_id并不是m_ids中的最大值，事务id是递增分配的。比方说现在有id为1，2，3这三个事务，之后id为3的事务提交了。那么一个新的读事务在生成ReadView时，m_ids就包括1和2，min_trx_id的值就是1， max_trx_id的值就是3,也就是说这个最大事务id是已经创建的事务id中的最大的id而不是活跃的最大id。</p>
+</blockquote>
+<p><strong>版本链访问规则：</strong></p>
+<p>当另外一个事务进行第一次查询操作的时候会生成这个readview，我们把上图的事务进行readview的生成m_ids就是[98,99,100,101]其中的min_trx_ids为98，max_trx_ids为101，通过最大的id和最小的id我们可以得到如下图的规则。</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703214900747.png" alt="image-20200703214900747" title="">
+                </div>
+                <div class="image-caption">image-20200703214900747</div>
+            </figure>
+
+<p>这样小于最小id的一定是已经提交的事务，大于最大id的一定是没有开始的事务，在最小以及最大的事务id之间的可能是已经提交过的也有可能是没有提交过的，所以我们就可以通过版本链从上向下遍历得到如下的步骤:</p>
+<ul>
+<li>如果被访问版本的trx_id属性值与ReadView中的creator_trx_id值相同，意味着当前事务在访问它自 己修改过的记录，所以该版本可以被当前事务访问。 </li>
+<li>如果被访问版本的trx_id属性值小于ReadView中的min_trx_id值，表明生成该版本的事务在当前事 务生成ReadView前已经提交，所以该版本可以被当前事务访问。</li>
+<li>如果被访问版本的trx_id属性值大于ReadView中的max_trx_id值，表明生成该版本的事务在当前事 务生成ReadView后才开启，所以该版本不可以被当前事务访问。 </li>
+<li>如果被访问版本的trx_id属性值在ReadView的min_trx_id和max_trx_id之间，那就需要判断一下 trx_id属性值是不是在m_ids列表中，如果在，说明创建ReadView时生成该版本的事务还是活跃 的，该版本不可以被访问；如果不在，说明创建ReadView时生成该版本的事务已经被提交，该版 本可以被访问</li>
+</ul>
+<p>需要注意的是在上图中我们的id是递减的有时候可能因为提交的顺序不一致导致不一定是递减的，如下图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703220024806.png" alt="image-20200703220024806" title="">
+                </div>
+                <div class="image-caption">image-20200703220024806</div>
+            </figure>
+
+<p>​    我们既然说过关于读已提交和可重复读都是利用了版本链那么他们有什么区别呢，其实对于读已提交来说，版本链的生成是每一次查询都会生成一个readview，每次都生成一个readview就是及时的更新已经提交的事务，这样就可以读取到已经提交的事务的数据了。而可重复读则是在第一次查询的时候生成readview,这样不会及时更新，可以重复读取数据。</p>
+<p>​    我们上边只是针对修改做了简述，还有就是在删除也会使用到MVCC，其实删除可以作为update的特殊情况，删除时会将版本链上的数据复制一份，然后将trx_id修改成删除操作的trx_id，同时在该条记录的头信息（record header）里的（deleted flag）标记位上写上true，来表示当前的记录已经被删除，在查询的时候按照上边的规则，查到对应的记录，如果deleted flag的数据为true意味着已经被删除不返回数据。</p>
+<p><strong>MVCC总结：</strong><br>    MVCC（Multi-Version Concurrency Control ，多版本并发控制）指的就是在使用READ COMMITTD、 REPEATABLE READ这两种隔离级别的事务在执行普通的SEELCT操作时访问记录的版本链的过程。可以使不同 事务的读-写、写-读操作并发执行，从而提升系统性能。READ COMMITTD、REPEATABLE READ这两个隔离级 别的一个很大不同就是：生成ReadView的时机不同，READ COMMITTD在每一次进行普通SELECT操作前都会 生成一个ReadView，而REPEATABLE READ只在第一次进行普通SELECT操作前生成一个ReadView，之后的查 询操作都重复使用这个ReadView就好了。</p>
+]]></content>
+      <categories>
+        <category>数据库</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>打家劫舍</title>
+    <url>/2020/06/09/%E4%B8%89%E7%A7%8D%E6%89%93%E5%AE%B6%E5%8A%AB%E8%88%8D%E9%97%AE%E9%A2%98%E8%A7%A3%E6%9E%90/</url>
+    <content><![CDATA[<h2 id="三种打家劫舍问题解析"><a href="#三种打家劫舍问题解析" class="headerlink" title="三种打家劫舍问题解析"></a>三种打家劫舍问题解析</h2><p>在力扣的题库种右这样一种题目，是一种经典的动态规划类题目。</p>
+<ul>
+<li><p><strong>简单版本的打家劫舍</strong></p>
+<p>你是一个专业的小偷，计划偷窃沿街的房屋。每间房内都藏有一定的现金，影响你偷窃的唯一制约因素就是相邻的房屋装有相互连通的防盗系统，如果两间相邻的房屋在同一晚上被小偷闯入，系统会自动报警。</p>
+<p>给定一个代表每个房屋存放金额的非负整数数组，计算你 不触动警报装置的情况下 ，一夜之内能够偷窃到的最高金额。</p>
+<blockquote>
+<p>示例 1：</p>
+<p>输入：[1,2,3,1]</p>
+<p>输出：4<br>解释：偷窃 1 号房屋 (金额 = 1) ，然后偷窃 3 号房屋 (金额 = 3)。<br>     偷窃到的最高金额 = 1 + 3 = 4 。</p>
+<p>示例 2：</p>
+<p>输入：[2,7,9,3,1]<br>输出：12<br>解释：偷窃 1 号房屋 (金额 = 2), 偷窃 3 号房屋 (金额 = 9)，接着偷窃 5 号房屋 (金额 = 1)。<br>     偷窃到的最高金额 = 2 + 9 + 1 = 12 。</p>
+</blockquote>
+</li>
+</ul>
+<p>  提示：</p>
+<p>  0 &lt;= nums.length &lt;= 100<br>  0 &lt;= nums[i] &lt;= 400</p>
+<p>  <strong>题目解析：</strong></p>
+<p>  ​    这个问题就很简单了，我们思考满足打家劫舍条件的就是两家不能相连，也就是说当打劫到当前店铺的他不能打劫相邻的上一家店铺，所以我们可以建立两个变量，一个用来存放打劫到当前房屋的时候的最大金额，以及打劫到相邻的上家房屋时候的最大金额，而当前房屋的最大金额又是打劫到上上家房屋时的最大金额加上当前金额，并且我们有一个替换过程，当我们继续往下迭代的时候此一次的n-1家的最大金额就等于当前的最大金额，而下个迭代的n-2家的最大金额就是本迭代的n-1家的最大金额，我们不断的进行替换，迭代下去。</p>
+<p>  <strong>自己在这个问题中存在的疑问：</strong></p>
+<p>  ​    自己碰到的过不去的点就在于自己本能想到前后都要兼顾不能打劫，意思就是我打劫到当前房屋以后我需要考虑相邻上家不能打劫，相邻下家不能打劫，这就导致了没法继续思考下去，上边的解决方案无疑是比较巧妙的一种解决方式，只考虑打劫到当前房屋时对打劫过来的店铺进行考虑，而不去考虑还未打劫的房屋。</p>
+<p>  <strong>代码实现：</strong></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 解析：这个问题的关键是要建立一种思路，什么思路呢？</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 要这样思考就是要考虑如果打劫这家店铺需要什么条件？</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 打劫这家店铺就不能够打劫它相邻的上一家店铺，有人可能会说</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 他的下一家也不能打劫，但是我们想，当我们打劫到下一家的时候是不是同样的不能打劫上一家</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 接下来要考虑另外一个问题：</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 我们打劫到当前店铺以后所获取的钱应该是之前n-2家店铺的获取的钱的最大值加上当前店铺的钱</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 我们不能够直接去考虑到底有多少种打劫方式。那样会极为复杂</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(<span class="keyword">int</span>[] num)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> n_2=<span class="number">0</span>;<span class="comment">//前n-2家店的最大钱数</span></span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> n_1=<span class="number">0</span>;<span class="comment">//第n_1家店的最大钱数  如果我们不打劫当前店铺那么此时最大的钱数就是前n-1家的最大值</span></span><br><span class="line"></span><br><span class="line">       <span class="keyword">for</span>(<span class="keyword">int</span> i=<span class="number">0</span>;i&lt;num.length;i++)&#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">int</span> temp=n_1;</span><br><span class="line"></span><br><span class="line">           n_1=Math.max(n_2+num[i],n_1);<span class="comment">//把前n-2的数据和当前的数据相加  然后与前n-1家的最大值做比较</span></span><br><span class="line"></span><br><span class="line">           n_2=temp;<span class="comment">//下一次循环的时候n-2就会等于这次的n-1</span></span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p><strong>稍微复杂的打家劫舍问题解析</strong></p>
+<p>你是一个专业的小偷，计划偷窃沿街的房屋，每间房内都藏有一定的现金。这个地方所有的房屋都围成一圈，这意味着第一个房屋和最后一个房屋是紧挨着的。同时，相邻的房屋装有相互连通的防盗系统，如果两间相邻的房屋在同一晚上被小偷闯入，系统会自动报警。</p>
+<p>给定一个代表每个房屋存放金额的非负整数数组，计算你在不触动警报装置的情况下，能够偷窃到的最高金额。</p>
+<blockquote>
+<p>示例 1:</p>
+<p>输入: [2,3,2]<br>输出: 3<br>解释: 你不能先偷窃 1 号房屋（金额 = 2），然后偷窃 3 号房屋（金额 = 2）, 因为他们是相邻的。<br>示例 2:</p>
+<p>输入: [1,2,3,1]<br>输出: 4<br>解释: 你可以先偷窃 1 号房屋（金额 = 1），然后偷窃 3 号房屋（金额 = 3）。<br>     偷窃到的最高金额 = 1 + 3 = 4 。</p>
+</blockquote>
+<p>​    和简单版本不同的是这次所有的房屋是围成圈的，有一个思路，如果我们选择了第一个家就不能选择最后一家，如果我们选择了最后一家就不能选择第一家，当然我们可以第一家和最后一家都不选，但是这样我们肯定没有前两种情况打劫的钱多，所以我们只考虑前两种即可，基于前两种情况的考虑我们可以将环形的数组分为两个单向的数组，即索引位0到（n-2）和1到（n-1）然后我们利用普通版的打家劫舍代码分别去计算这两种情况然后取最大值就可以了，所以我们就可以得到我们的代码。</p>
+<p><strong>代码实现</strong></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(<span class="keyword">int</span>[] nums)</span> </span>&#123;</span><br><span class="line"> </span><br><span class="line">        <span class="keyword">if</span>(nums.length==<span class="number">1</span>)&#123;</span><br><span class="line">            <span class="keyword">return</span> nums[<span class="number">0</span>];</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(nums.length==<span class="number">0</span>)&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> Math.max(rober(nums,<span class="number">0</span>,nums.length-<span class="number">2</span>),rober(nums,<span class="number">1</span>,nums.length-<span class="number">1</span>));</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rober</span><span class="params">(<span class="keyword">int</span>[] nums,<span class="keyword">int</span> start,<span class="keyword">int</span> end)</span></span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//到达上一个最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_1=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//到达上上个的最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_2=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span>(<span class="keyword">int</span> i=start;i&lt;=end;i++)&#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">int</span> temp=n_1;</span><br><span class="line"></span><br><span class="line">            n_1= Math.max(n_2+nums[i],n_1);</span><br><span class="line"></span><br><span class="line">            n_2=temp;</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<ul>
+<li><p><strong>终极打家劫舍问题</strong></p>
+<p>在上次打劫完一条街道之后和一圈房屋后，小偷又发现了一个新的可行窃的地区。这个地区只有一个入口，我们称之为“根”。 除了“根”之外，每栋房子有且只有一个“父“房子与之相连。一番侦察之后，聪明的小偷意识到“这个地方的所有房屋的排列类似于一棵二叉树”。 如果两个直接相连的房子在同一天晚上被打劫，房屋将自动报警。</p>
+<p>计算在不触动警报的情况下，小偷一晚能够盗取的最高金额。</p>
+<blockquote>
+<p>示例 1:</p>
+<p>输入: [3,2,3,null,3,null,1]</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">  <span class="number">3</span></span><br><span class="line"> / \</span><br><span class="line"><span class="number">2</span>   <span class="number">3</span></span><br><span class="line"> \    \  </span><br><span class="line">  <span class="number">3</span>     <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>输出: 7<br>解释: 小偷一晚能够盗取的最高金额 = 3 + 3 + 1 = 7.<br>示例 2:</p>
+<p>输入: [3,4,5,1,3,null,1]</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">    <span class="number">3</span></span><br><span class="line">   / \</span><br><span class="line">  <span class="number">4</span>   <span class="number">5</span></span><br><span class="line"> / \   \ </span><br><span class="line"><span class="number">1</span>   <span class="number">3</span>   <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>输出: 9<br>解释: 小偷一晚能够盗取的最高金额 = 4 + 5 = 9.</p>
+</blockquote>
+<p>​    最后一种打家劫舍问题其实也不难，只不过转化了一下思路而已，之前是相邻两家房屋不能打劫，现在是相同相邻的两层房子不能打劫而已，所以我们的计算方法是一样的只不过是在计算每一层所能够打劫到的钱财时稍许复杂。</p>
+</li>
+<li><p><strong>代码实现</strong></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Definition for a binary tree node.</span></span><br><span class="line"><span class="comment"> * public class TreeNode &#123;</span></span><br><span class="line"><span class="comment"> *     int val;</span></span><br><span class="line"><span class="comment"> *     TreeNode left;</span></span><br><span class="line"><span class="comment"> *     TreeNode right;</span></span><br><span class="line"><span class="comment"> *     TreeNode(int x) &#123; val = x; &#125;</span></span><br><span class="line"><span class="comment"> * &#125;</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ul>
+<pre><code>  //建立一个备忘录，用来记录打劫到某个节点的时候的最大钱数，以此来减少重复操作
+  Map&lt;TreeNode,Integer&gt;  map=new HashMap&lt;&gt;();
+
+  public int rob(TreeNode root) {
+
+      if(root==null){return 0;}
+
+      if(map.containsKey(root)){
+
+          return map.get(root);
+
+      }
+
+      //n-2层的最大钱数
+      int n_2=0;
+      //n-1层的最大钱数
+      int n_1=0;
+
+      //判断为null的情况
+      int val=root==null?0:root.val;
+      int temp=n_1;
+      //这一层的加上下下层的最大钱数
+      n_1=Math.max(val+(root.left==null?0:(rob(root.left.left)+rob(root.left.right)))
+             +(root.right==null?0:(rob(root.right.left)+rob(root.right.right))),
+             rob(root.right)+rob(root.left));
+      n_2=temp;
+      map.put(root,n_1);
+
+      return n_1;
+
+  }</code></pre>
+<p>  }<br>  <figure class="highlight plain"><table><tr><td class="code"><pre><span class="line"></span><br><span class="line">​</span><br></pre></td></tr></table></figure></p>
+]]></content>
+      <categories>
+        <category>数据结构与算法</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>HashMap的源码</title>
+    <url>/2020/06/09/HashMap%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8E%E7%90%86%E8%A7%A3/</url>
+    <content><![CDATA[<h2 id="jdk8中的HashMap源码解析与理解"><a href="#jdk8中的HashMap源码解析与理解" class="headerlink" title="jdk8中的HashMap源码解析与理解"></a>jdk8中的HashMap源码解析与理解</h2><h3 id="一、预备知识"><a href="#一、预备知识" class="headerlink" title="一、预备知识"></a>一、预备知识</h3><p><strong>关于hash：</strong></p>
 <p>​    有个非常关键的特点，不定长度的输入固定长度的输出，将一个对象经过一定的hash算法映射成相同长度的hash值。</p>
 <p><strong>hash冲突的避免：</strong></p>
 <p>​    hash是无法完全避免的，只能通过各种方法手段尽量的减少hash冲突。</p>
@@ -34,9 +217,23 @@
  4. 树化的阈值：在jdk8中当链表的长度大于了8以后会转为红黑树，这个8就是转为红黑树的阈值。</code></pre>
 <p><strong>hashmap中的key的hashcode是直接利用hashcode方法生成的吗？</strong></p>
 <p>​    这个地方不是直接用原生的hashcode方法生成的，而是随原生的hashcode方法进行搞16位异或低16位的扰动，举个例子，假设存放key=“nihao”，如图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200704215356745.png" alt="image-20200704215356745"></p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200704215356745.png" alt="image-20200704215356745" title="">
+                </div>
+                <div class="image-caption">image-20200704215356745</div>
+            </figure>
+
 <p>我们按照源码中的计算过程如下图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200704220137606.png"></p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200704220137606.png" alt="" title="">
+                </div>
+                <div class="image-caption"></div>
+            </figure>
+
 <p>通过这样得二次位扰动加工处理我们尽可能得避免了hash碰撞得发生，进一步降低hash冲突的几率。</p>
 <p>​    我们可以通过另外一个例子分析一下是如何降低得，假设我们得数组长度是16那么我们在进行取模运算得时候则是通过hashcode&amp;(16-1)这样得运算得到得索引值，如果我们得key为“abcabcabcabcabc”，我们得到如下:</p>
 <table>
@@ -88,13 +285,34 @@
 <p>通过上边的例子我们可以得到，如果未进行扰动那么只要hashcode后四位为0那么无论前边28位如何变化得到的结果只会位0，但是进行扰动以后情况有所不同了，显然末尾变成了0110减少了碰撞几率。</p>
 <p><strong>hashMap中数组的创建和初始化是一开始进行的吗？</strong></p>
 <p>​    hashmap中的数组不是new的时候创建的，而是在第一次put的时候做的初始化使用懒加载的方式，节省了空间。如图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705000856653.png" alt="image-20200705000856653"></p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705000856653.png" alt="image-20200705000856653" title="">
+                </div>
+                <div class="image-caption">image-20200705000856653</div>
+            </figure>
+
 <p>第一次会走如图的红框部分，进去这个分支以后会执行resize()方法，在resize中会对数组进行初始化。</p>
 <p><strong>链表转为红黑树需要什么条件：</strong></p>
 <p>​    链表转为红黑树主要要满足两个条件，一个是链表的长度大于8，另外一个是数组的长度大于64这个我们可以看下源码中的表现：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705001819146.png" alt="image-20200705001819146"></p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705001819146.png" alt="image-20200705001819146" title="">
+                </div>
+                <div class="image-caption">image-20200705001819146</div>
+            </figure>
+
 <p>在上图的程序中binCount表示了链表的长度，我们可以看到当bitcount&gt;=7的时候会执行treeifyBin()这个方法，既然是7为什么我们说大于8呢，这是因为bitCount等于7的时候我们其实已经循环了8次因为数组从0开始的，并且我们的p.next = newNode(hash, key, value, null);这段代码先执行也就是说先挂了一个node上去然后去判断的，所以此时除了根节点以外的长度是8而我们加上根节点，长度就变为了9，所以当大于8才会转为执行treeifyBin()这个方法，数组长度大于64又是从哪里体现呢，这个就在treeifyBin()方法中了，如图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705002338847.png"></p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705002338847.png" alt="" title="">
+                </div>
+                <div class="image-caption"></div>
+            </figure>
+
 <p>此时我们可以看出当数组的长度小于64的时候会执行resize()操作进行二倍扩容。</p>
 <p><strong>为什么转为红黑树的链表长度要大于8？</strong></p>
 <p>​    因为这是根据一个理论基础叫泊松分布，泊松分布用于描述单位时间（或空间）内随机事件发生的次数。我们可以看到jdk源码中有这么一段注释</p>
@@ -121,7 +339,14 @@
 <p>​    扩容的时候一开始要计算新的map容量以及新的扩容阈值，在计算两者的时候分了两种情况，一种就是数组还没有进行初始化，第二种就是原先已经有数据了，如果没有进行初始化就让新的数组的容量等于扩容阈值， newCap = oldThr为什么会是这样呢，因为这里有个小细节那就是hashmap没有容量这个属性，一开始初始化之前是把容量大小计算以后赋值给了阈值这个字段，初始化第一次以后阈值字段存储的才是真正的阈值即执行了 newThr = (newCap &lt; MAXIMUM_CAPACITY &amp;&amp; ft &lt; (float)MAXIMUM_CAPACITY  ?  (int)ft : Integer.MAX_VALUE)。如果进行了初始化那就很明确了就是将原先的容量左移一位同时将阈值字段左移一位。采用位移的方式进行计算是因为乘法运算最终还是会转为位移运算。</p>
 <p>​    第一步计算扩容后的容量以及阈值以后开始进行数据的迁移工作，即将老数组中的数据迁移到新数组中去。在迁移过程中又分为了四种情况，第一种情况就是当前的索引位置的数据为null这种情况我们可以就不做处理，第二种情况就是当前索引位置只有一个数据，没有形成链表，此时我们直接将这个数据迁移到新的数组的位置就可以了。第三种情况就是迁移的数据已经树化形成了红黑树。第四种情况就是普通没有树化的情况。</p>
 <p>​    第四种情况是如何扩容的，如果是普通的链表没有树化的情况下是将链表分为了两部分（高位链、低位链），这个关于高位链和低位链我们来分析一下，假如我们一开始的数组大小为16后来扩容成32，并且我们又两个key（key1，key2）如图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705095543390.png"></p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200705095543390.png" alt="" title="">
+                </div>
+                <div class="image-caption"></div>
+            </figure>
+
 <p>我们发现当我们在利用位运算取模进行索引值计算的时候如果是16我们会与15（1111）进行与运算这样另外的28位的高位无论是什么值都会是0，也就是索引只去取决于低四位。如果是32那么我们会与31（1 1111）进行与运算，此时的高27位无论是什么值都不有影响，我们发现从16到32其实就是多了一位的取决因素，多的这一位恰好就是十进制的16，所以我们不难想到我们将hash值与原有的容量进行与运算即key.hash&amp;10000如果结果为0则意味着key.hash的第五位上是0不会因为扩容被干扰到所以就会放在低位链里边，但是如果不是0那么意味着会被扩容干扰到索引位置，需要放入到高位链中。通过这样区分了高位链和低位链以后我们将低位链放在新数组的原先位置，高位链放在新数组的原索引加上老数组的容量的位置，以此来摒弃了jdk7的倒置的扩容方式，有效的防止了环链的形成。</p>
 <p>​    第三种情况如果是红黑树的情况下是如何扩容的，我们看下代码:</p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">void</span> <span class="title">split</span><span class="params">(HashMap&lt;K,V&gt; map, Node&lt;K,V&gt;[] tab, <span class="keyword">int</span> index, <span class="keyword">int</span> bit)</span> </span>&#123;</span><br><span class="line">    TreeNode&lt;K,V&gt; b = <span class="keyword">this</span>;</span><br><span class="line">    <span class="comment">// Relink into lo and hi lists, preserving order</span></span><br><span class="line">    TreeNode&lt;K,V&gt; loHead = <span class="keyword">null</span>, loTail = <span class="keyword">null</span>;</span><br><span class="line">    TreeNode&lt;K,V&gt; hiHead = <span class="keyword">null</span>, hiTail = <span class="keyword">null</span>;</span><br><span class="line">    <span class="keyword">int</span> lc = <span class="number">0</span>, hc = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (TreeNode&lt;K,V&gt; e = b, next; e != <span class="keyword">null</span>; e = next) &#123;</span><br><span class="line">        next = (TreeNode&lt;K,V&gt;)e.next;</span><br><span class="line">        e.next = <span class="keyword">null</span>;</span><br><span class="line">        <span class="keyword">if</span> ((e.hash &amp; bit) == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">if</span> ((e.prev = loTail) == <span class="keyword">null</span>)</span><br><span class="line">                loHead = e;</span><br><span class="line">            <span class="keyword">else</span></span><br><span class="line">                loTail.next = e;</span><br><span class="line">            loTail = e;</span><br><span class="line">            ++lc;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> ((e.prev = hiTail) == <span class="keyword">null</span>)</span><br><span class="line">                hiHead = e;</span><br><span class="line">            <span class="keyword">else</span></span><br><span class="line">                hiTail.next = e;</span><br><span class="line">            hiTail = e;</span><br><span class="line">            ++hc;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (loHead != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (lc &lt;= UNTREEIFY_THRESHOLD)</span><br><span class="line">            tab[index] = loHead.untreeify(map);</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            tab[index] = loHead;</span><br><span class="line">            <span class="keyword">if</span> (hiHead != <span class="keyword">null</span>) <span class="comment">// (else is already treeified)</span></span><br><span class="line">                loHead.treeify(tab);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (hiHead != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (hc &lt;= UNTREEIFY_THRESHOLD)</span><br><span class="line">            tab[index + bit] = hiHead.untreeify(map);</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            tab[index + bit] = hiHead;</span><br><span class="line">            <span class="keyword">if</span> (loHead != <span class="keyword">null</span>)</span><br><span class="line">                hiHead.treeify(tab);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
@@ -139,135 +364,12 @@
 </ol>
 ]]></content>
       <categories>
-        <category>源码</category>
+        <category>源码解析</category>
       </categories>
   </entry>
   <entry>
-    <title>Mysql中的MVCC（多版本并发控制）</title>
-    <url>/2020/08/16/Mysql%E4%B8%AD%E7%9A%84MVCC%EF%BC%88%E5%A4%9A%E7%89%88%E6%9C%AC%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6%EF%BC%89/</url>
-    <content><![CDATA[<h2 id="Mysql中的MVCC（多版本并发控制）"><a href="#Mysql中的MVCC（多版本并发控制）" class="headerlink" title="Mysql中的MVCC（多版本并发控制）"></a>Mysql中的MVCC（多版本并发控制）</h2><p>Mysql中的MVCC是一个特别难以理解的点，在讲述mvcc之前我们先来简单介绍关于数据库的事务的一点相关知识。</p>
-<p><strong>数据库的事务的特性：</strong></p>
-<ol>
-<li>原子性：每个事务都是不可分割的最小执行单位。</li>
-<li>隔离性：每个事务之间是相互隔离互不影响的。</li>
-<li>一致性：在一个事务中的操作要么全部成功要么全部失败。</li>
-<li>持久性：一旦事务结束，执行的结果是持久的。</li>
-</ol>
-<p><strong>事务的隔离级别：</strong></p>
-<ol>
-<li>读未提交：一个事务读取到另外一个事务还没有提交的结果。</li>
-<li>读已提交：一个事务只会读到另外一个事务提交的结果。（Oracle默认的隔离级别）</li>
-<li>可重复读：在一个事务中第一次读取一个数据的结果和后边读取这个数据的结果是一致的。（mysql默认的隔离级别）</li>
-<li>串行化：所有的事务都是串行执行的，不存在并行的情况。</li>
-</ol>
-<p>在上边介绍的四种隔离级别中第一种隔离级别很明显是不对的，最后一种很明显是效率底下的，所以在我们的mysql中基本上不会使用第一种和第四种隔离级别，所以我们接下来主要讨论第二种和第三种隔离级别。我们说到这两种隔离级别以后那么这两种隔离级别是如何实现的，在mysql中其实他就是借助于我们的MVCC来实现的这两种隔离级别。MVCC有两个特别重要的概念就是版本链和readview视图。</p>
-<p><strong>版本链：</strong></p>
-<p>​    对于使用InnoDB存储引擎的表来说，它的聚簇索引记录中都包含两个必要的隐藏列（row_id并不是必要的，我们 创建的表中有主键或者非NULL唯一键时都不会包含row_id列）</p>
-<ul>
-<li>trx_id：每次对某条记录进行改动时，都会把对应的事务id赋值给trx_id隐藏列。 </li>
-<li>roll_pointer：每次对某条记录进行改动时，这个隐藏列会存一个指针，可以通过这个指针找到该记 录修改前的信息。</li>
-</ul>
-<p>每个trx_id代表了一个事务，每个rollpointer则指向了当前事务的上一个事务。我们如果有一张user表如图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703211103307.png"></p>
-<p>​    </p>
-<p>​    图中我们用红色表示已经commit的事务，用绿色表示还没有提交的事务，最开始只有最下边的98号事务并且他是已经提交的，但是当99号事务开始的时候，就会讲roll_pointer指针指向98号事务并且将98号事务的数据放入undo日志中，以方便回滚。此时又来了一个100号事务执行了更新操作，把张三2改为张三3此时100号事务的roll_pointer指向99号事务的数据。同时100号事务没有结束，他又更新了一遍这条数据，此时将张三3改为了张三4，同理他的指针指向了之前的100号事务，此时又来了101号事务对事务进行了更新，指向了之前的100号事务。以上便构成了我们的版本链。</p>
-<p><strong>ReadView:</strong></p>
-<p>ReadView中主要包含4个比较重要的内容： </p>
-<ol>
-<li>m_ids：表示在生成ReadView时当前系统中活跃的读写事务的事务id列表。 </li>
-<li>min_trx_id：表示在生成ReadView时当前系统中活跃的读写事务中最小的事务id，也就是m_ids中的最小 值。 </li>
-<li>max_trx_id：表示生成ReadView时系统中应该分配给下一个事务的id值。 </li>
-<li>creator_trx_id：表示生成该ReadView的事务的事务id</li>
-</ol>
-<blockquote>
-<p>注意:max_trx_id并不是m_ids中的最大值，事务id是递增分配的。比方说现在有id为1，2，3这三个事务，之后id为3的事务提交了。那么一个新的读事务在生成ReadView时，m_ids就包括1和2，min_trx_id的值就是1， max_trx_id的值就是3,也就是说这个最大事务id是已经创建的事务id中的最大的id而不是活跃的最大id。</p>
-</blockquote>
-<p><strong>版本链访问规则：</strong></p>
-<p>当另外一个事务进行第一次查询操作的时候会生成这个readview，我们把上图的事务进行readview的生成m_ids就是[98,99,100,101]其中的min_trx_ids为98，max_trx_ids为101，通过最大的id和最小的id我们可以得到如下图的规则。</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703214900747.png" alt="image-20200703214900747"></p>
-<p>这样小于最小id的一定是已经提交的事务，大于最大id的一定是没有开始的事务，在最小以及最大的事务id之间的可能是已经提交过的也有可能是没有提交过的，所以我们就可以通过版本链从上向下遍历得到如下的步骤:</p>
-<ul>
-<li>如果被访问版本的trx_id属性值与ReadView中的creator_trx_id值相同，意味着当前事务在访问它自 己修改过的记录，所以该版本可以被当前事务访问。 </li>
-<li>如果被访问版本的trx_id属性值小于ReadView中的min_trx_id值，表明生成该版本的事务在当前事 务生成ReadView前已经提交，所以该版本可以被当前事务访问。</li>
-<li>如果被访问版本的trx_id属性值大于ReadView中的max_trx_id值，表明生成该版本的事务在当前事 务生成ReadView后才开启，所以该版本不可以被当前事务访问。 </li>
-<li>如果被访问版本的trx_id属性值在ReadView的min_trx_id和max_trx_id之间，那就需要判断一下 trx_id属性值是不是在m_ids列表中，如果在，说明创建ReadView时生成该版本的事务还是活跃 的，该版本不可以被访问；如果不在，说明创建ReadView时生成该版本的事务已经被提交，该版 本可以被访问</li>
-</ul>
-<p>需要注意的是在上图中我们的id是递减的有时候可能因为提交的顺序不一致导致不一定是递减的，如下图：</p>
-<p><img src="C:\Users\19697\AppData\Roaming\Typora\typora-user-images\image-20200703220024806.png" alt="image-20200703220024806"></p>
-<p>​    我们既然说过关于读已提交和可重复读都是利用了版本链那么他们有什么区别呢，其实对于读已提交来说，版本链的生成是每一次查询都会生成一个readview，每次都生成一个readview就是及时的更新已经提交的事务，这样就可以读取到已经提交的事务的数据了。而可重复读则是在第一次查询的时候生成readview,这样不会及时更新，可以重复读取数据。</p>
-<p>​    我们上边只是针对修改做了简述，还有就是在删除也会使用到MVCC，其实删除可以作为update的特殊情况，删除时会将版本链上的数据复制一份，然后将trx_id修改成删除操作的trx_id，同时在该条记录的头信息（record header）里的（deleted flag）标记位上写上true，来表示当前的记录已经被删除，在查询的时候按照上边的规则，查到对应的记录，如果deleted flag的数据为true意味着已经被删除不返回数据。</p>
-<p><strong>MVCC总结：</strong><br>    MVCC（Multi-Version Concurrency Control ，多版本并发控制）指的就是在使用READ COMMITTD、 REPEATABLE READ这两种隔离级别的事务在执行普通的SEELCT操作时访问记录的版本链的过程。可以使不同 事务的读-写、写-读操作并发执行，从而提升系统性能。READ COMMITTD、REPEATABLE READ这两个隔离级 别的一个很大不同就是：生成ReadView的时机不同，READ COMMITTD在每一次进行普通SELECT操作前都会 生成一个ReadView，而REPEATABLE READ只在第一次进行普通SELECT操作前生成一个ReadView，之后的查 询操作都重复使用这个ReadView就好了。</p>
-]]></content>
-  </entry>
-  <entry>
-    <title>三种打家劫舍问题解析</title>
-    <url>/2020/08/16/%E4%B8%89%E7%A7%8D%E6%89%93%E5%AE%B6%E5%8A%AB%E8%88%8D%E9%97%AE%E9%A2%98%E8%A7%A3%E6%9E%90/</url>
-    <content><![CDATA[<h2 id="三种打家劫舍问题解析"><a href="#三种打家劫舍问题解析" class="headerlink" title="三种打家劫舍问题解析"></a>三种打家劫舍问题解析</h2><p>在力扣的题库种右这样一种题目，是一种经典的动态规划类题目。</p>
-<ul>
-<li><p><strong>简单版本的打家劫舍</strong></p>
-<p>你是一个专业的小偷，计划偷窃沿街的房屋。每间房内都藏有一定的现金，影响你偷窃的唯一制约因素就是相邻的房屋装有相互连通的防盗系统，如果两间相邻的房屋在同一晚上被小偷闯入，系统会自动报警。</p>
-<p>给定一个代表每个房屋存放金额的非负整数数组，计算你 不触动警报装置的情况下 ，一夜之内能够偷窃到的最高金额。</p>
-<blockquote>
-<p>示例 1：</p>
-<p>输入：[1,2,3,1]</p>
-<p>输出：4<br>解释：偷窃 1 号房屋 (金额 = 1) ，然后偷窃 3 号房屋 (金额 = 3)。<br>     偷窃到的最高金额 = 1 + 3 = 4 。</p>
-<p>示例 2：</p>
-<p>输入：[2,7,9,3,1]<br>输出：12<br>解释：偷窃 1 号房屋 (金额 = 2), 偷窃 3 号房屋 (金额 = 9)，接着偷窃 5 号房屋 (金额 = 1)。<br>     偷窃到的最高金额 = 2 + 9 + 1 = 12 。</p>
-</blockquote>
-</li>
-</ul>
-<p>  提示：</p>
-<p>  0 &lt;= nums.length &lt;= 100<br>  0 &lt;= nums[i] &lt;= 400</p>
-<p>  <strong>题目解析：</strong></p>
-<p>  ​    这个问题就很简单了，我们思考满足打家劫舍条件的就是两家不能相连，也就是说当打劫到当前店铺的他不能打劫相邻的上一家店铺，所以我们可以建立两个变量，一个用来存放打劫到当前房屋的时候的最大金额，以及打劫到相邻的上家房屋时候的最大金额，而当前房屋的最大金额又是打劫到上上家房屋时的最大金额加上当前金额，并且我们有一个替换过程，当我们继续往下迭代的时候此一次的n-1家的最大金额就等于当前的最大金额，而下个迭代的n-2家的最大金额就是本迭代的n-1家的最大金额，我们不断的进行替换，迭代下去。</p>
-<p>  <strong>自己在这个问题中存在的疑问：</strong></p>
-<p>  ​    自己碰到的过不去的点就在于自己本能想到前后都要兼顾不能打劫，意思就是我打劫到当前房屋以后我需要考虑相邻上家不能打劫，相邻下家不能打劫，这就导致了没法继续思考下去，上边的解决方案无疑是比较巧妙的一种解决方式，只考虑打劫到当前房屋时对打劫过来的店铺进行考虑，而不去考虑还未打劫的房屋。</p>
-<p>  <strong>代码实现：</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 解析：这个问题的关键是要建立一种思路，什么思路呢？</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 要这样思考就是要考虑如果打劫这家店铺需要什么条件？</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 打劫这家店铺就不能够打劫它相邻的上一家店铺，有人可能会说</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 他的下一家也不能打劫，但是我们想，当我们打劫到下一家的时候是不是同样的不能打劫上一家</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 接下来要考虑另外一个问题：</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 我们打劫到当前店铺以后所获取的钱应该是之前n-2家店铺的获取的钱的最大值加上当前店铺的钱</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    * 我们不能够直接去考虑到底有多少种打劫方式。那样会极为复杂</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(<span class="keyword">int</span>[] num)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> n_2=<span class="number">0</span>;<span class="comment">//前n-2家店的最大钱数</span></span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> n_1=<span class="number">0</span>;<span class="comment">//第n_1家店的最大钱数  如果我们不打劫当前店铺那么此时最大的钱数就是前n-1家的最大值</span></span><br><span class="line"></span><br><span class="line">       <span class="keyword">for</span>(<span class="keyword">int</span> i=<span class="number">0</span>;i&lt;num.length;i++)&#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">int</span> temp=n_1;</span><br><span class="line"></span><br><span class="line">           n_1=Math.max(n_2+num[i],n_1);<span class="comment">//把前n-2的数据和当前的数据相加  然后与前n-1家的最大值做比较</span></span><br><span class="line"></span><br><span class="line">           n_2=temp;<span class="comment">//下一次循环的时候n-2就会等于这次的n-1</span></span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><p><strong>稍微复杂的打家劫舍问题解析</strong></p>
-<p>你是一个专业的小偷，计划偷窃沿街的房屋，每间房内都藏有一定的现金。这个地方所有的房屋都围成一圈，这意味着第一个房屋和最后一个房屋是紧挨着的。同时，相邻的房屋装有相互连通的防盗系统，如果两间相邻的房屋在同一晚上被小偷闯入，系统会自动报警。</p>
-<p>给定一个代表每个房屋存放金额的非负整数数组，计算你在不触动警报装置的情况下，能够偷窃到的最高金额。</p>
-<blockquote>
-<p>示例 1:</p>
-<p>输入: [2,3,2]<br>输出: 3<br>解释: 你不能先偷窃 1 号房屋（金额 = 2），然后偷窃 3 号房屋（金额 = 2）, 因为他们是相邻的。<br>示例 2:</p>
-<p>输入: [1,2,3,1]<br>输出: 4<br>解释: 你可以先偷窃 1 号房屋（金额 = 1），然后偷窃 3 号房屋（金额 = 3）。<br>     偷窃到的最高金额 = 1 + 3 = 4 。</p>
-<p>​</p>
-</blockquote>
-<p>​    和简单版本不同的是这次所有的房屋是围成圈的，有一个思路，如果我们选择了第一个家就不能选择最后一家，如果我们选择了最后一家就不能选择第一家，当然我们可以第一家和最后一家都不选，但是这样我们肯定没有前两种情况打劫的钱多，所以我们只考虑前两种即可，基于前两种情况的考虑我们可以将环形的数组分为两个单向的数组，即索引位0到（n-2）和1到（n-1）然后我们利用普通版的打家劫舍代码分别去计算这两种情况然后取最大值就可以了，所以我们就可以得到我们的代码。</p>
-<p><strong>代码实现</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(<span class="keyword">int</span>[] nums)</span> </span>&#123;</span><br><span class="line"> </span><br><span class="line">        <span class="keyword">if</span>(nums.length==<span class="number">1</span>)&#123;</span><br><span class="line">            <span class="keyword">return</span> nums[<span class="number">0</span>];</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(nums.length==<span class="number">0</span>)&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> Math.max(rober(nums,<span class="number">0</span>,nums.length-<span class="number">2</span>),rober(nums,<span class="number">1</span>,nums.length-<span class="number">1</span>));</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rober</span><span class="params">(<span class="keyword">int</span>[] nums,<span class="keyword">int</span> start,<span class="keyword">int</span> end)</span></span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//到达上一个最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_1=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//到达上上个的最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_2=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span>(<span class="keyword">int</span> i=start;i&lt;=end;i++)&#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">int</span> temp=n_1;</span><br><span class="line"></span><br><span class="line">            n_1= Math.max(n_2+nums[i],n_1);</span><br><span class="line"></span><br><span class="line">            n_2=temp;</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​</p>
-</li>
-<li><p><strong>终极打家劫舍问题</strong></p>
-<p>在上次打劫完一条街道之后和一圈房屋后，小偷又发现了一个新的可行窃的地区。这个地区只有一个入口，我们称之为“根”。 除了“根”之外，每栋房子有且只有一个“父“房子与之相连。一番侦察之后，聪明的小偷意识到“这个地方的所有房屋的排列类似于一棵二叉树”。 如果两个直接相连的房子在同一天晚上被打劫，房屋将自动报警。</p>
-<p>计算在不触动警报的情况下，小偷一晚能够盗取的最高金额。</p>
-<blockquote>
-<p>示例 1:</p>
-<p>输入: [3,2,3,null,3,null,1]</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">  <span class="number">3</span></span><br><span class="line"> / \</span><br><span class="line"><span class="number">2</span>   <span class="number">3</span></span><br><span class="line"> \    \  </span><br><span class="line">  <span class="number">3</span>     <span class="number">1</span></span><br></pre></td></tr></table></figure>
-
-<p>输出: 7<br>解释: 小偷一晚能够盗取的最高金额 = 3 + 3 + 1 = 7.<br>示例 2:</p>
-<p>输入: [3,4,5,1,3,null,1]</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">    <span class="number">3</span></span><br><span class="line">   / \</span><br><span class="line">  <span class="number">4</span>   <span class="number">5</span></span><br><span class="line"> / \   \ </span><br><span class="line"><span class="number">1</span>   <span class="number">3</span>   <span class="number">1</span></span><br></pre></td></tr></table></figure>
-
-<p>输出: 9<br>解释: 小偷一晚能够盗取的最高金额 = 4 + 5 = 9.</p>
-</blockquote>
-<p>​    最后一种打家劫舍问题其实也不难，只不过转化了一下思路而已，之前是相邻两家房屋不能打劫，现在是相同相邻的两层房子不能打劫而已，所以我们的计算方法是一样的只不过是在计算每一层所能够打劫到的钱财时稍许复杂。</p>
-</li>
-<li><p><strong>代码实现</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Definition for a binary tree node.</span></span><br><span class="line"><span class="comment"> * public class TreeNode &#123;</span></span><br><span class="line"><span class="comment"> *     int val;</span></span><br><span class="line"><span class="comment"> *     TreeNode left;</span></span><br><span class="line"><span class="comment"> *     TreeNode right;</span></span><br><span class="line"><span class="comment"> *     TreeNode(int x) &#123; val = x; &#125;</span></span><br><span class="line"><span class="comment"> * &#125;</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="comment">//建立一个备忘录，用来记录打劫到某个节点的时候的最大钱数，以此来减少重复操作</span></span><br><span class="line">    Map&lt;TreeNode,Integer&gt;  map=<span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">rob</span><span class="params">(TreeNode root)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(root==<span class="keyword">null</span>)&#123;<span class="keyword">return</span> <span class="number">0</span>;&#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(map.containsKey(root))&#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">return</span> map.get(root);</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//n-2层的最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_2=<span class="number">0</span>;</span><br><span class="line">        <span class="comment">//n-1层的最大钱数</span></span><br><span class="line">        <span class="keyword">int</span> n_1=<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//判断为null的情况</span></span><br><span class="line">        <span class="keyword">int</span> val=root==<span class="keyword">null</span>?<span class="number">0</span>:root.val;</span><br><span class="line">        <span class="keyword">int</span> temp=n_1;</span><br><span class="line">        <span class="comment">//这一层的加上下下层的最大钱数</span></span><br><span class="line">        n_1=Math.max(val+(root.left==<span class="keyword">null</span>?<span class="number">0</span>:(rob(root.left.left)+rob(root.left.right)))</span><br><span class="line">               +(root.right==<span class="keyword">null</span>?<span class="number">0</span>:(rob(root.right.left)+rob(root.right.right))),</span><br><span class="line">               rob(root.right)+rob(root.left));</span><br><span class="line">        n_2=temp;</span><br><span class="line">        map.put(root,n_1);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> n_1;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​</p>
-</li>
-</ul>
-]]></content>
-  </entry>
-  <entry>
-    <title>不同的二叉搜索树（96题）</title>
-    <url>/2020/08/16/%E4%B8%8D%E5%90%8C%E7%9A%84%E4%BA%8C%E5%8F%89%E6%90%9C%E7%B4%A2%E6%A0%91%EF%BC%8896%E9%A2%98%EF%BC%89/</url>
+    <title>二叉搜索树</title>
+    <url>/2020/06/09/%E4%B8%8D%E5%90%8C%E7%9A%84%E4%BA%8C%E5%8F%89%E6%90%9C%E7%B4%A2%E6%A0%91%EF%BC%8896%E9%A2%98%EF%BC%89/</url>
     <content><![CDATA[<h2 id="不同的二叉搜索树（96题）"><a href="#不同的二叉搜索树（96题）" class="headerlink" title="不同的二叉搜索树（96题）"></a>不同的二叉搜索树（96题）</h2><p>给定一个整数 n，求以 1 … n 为节点组成的二叉搜索树有多少种？</p>
 <p>示例:</p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line">输入: <span class="number">3</span></span><br><span class="line">输出: <span class="number">5</span></span><br><span class="line">解释:</span><br><span class="line">给定 n = <span class="number">3</span>, 一共有 <span class="number">5</span> 种不同结构的二叉搜索树:</span><br><span class="line"></span><br><span class="line"><span class="number">1</span>         <span class="number">3</span>     <span class="number">3</span>      <span class="number">2</span>      <span class="number">1</span></span><br><span class="line"> \       /     /      / \      \</span><br><span class="line">  <span class="number">3</span>     <span class="number">2</span>     <span class="number">1</span>      <span class="number">1</span>   <span class="number">3</span>      <span class="number">2</span></span><br><span class="line"> /     /       \                 \</span><br><span class="line"><span class="number">2</span>     <span class="number">1</span>         <span class="number">2</span>                 <span class="number">3</span></span><br></pre></td></tr></table></figure>
@@ -278,34 +380,13 @@
 
 <p>动态规划的精髓就是后边我们需要的结果一定时依赖于前边的计算结果的。除此之外他与分治算法非常相似，就是将待求解问题分解成若干个子问题，然后从这些子问题种得到原问题的解。比如上边的问题种，我们需要求n个数据是可以组成的二叉搜索树的个数，那么我们可以分解成左边元素组成的个数乘以右边元素所组成的个数，同时我们不直接计算n个元素而是我们从0个元素往后计算直至推导出我们想要的n个元素的结果。</p>
 ]]></content>
+      <categories>
+        <category>数据结构与算法</category>
+      </categories>
   </entry>
   <entry>
-    <title>力扣464题我能赢吗</title>
-    <url>/2020/08/16/%E5%8A%9B%E6%89%A3464%E9%A2%98%E6%88%91%E8%83%BD%E8%B5%A2%E5%90%97/</url>
-    <content><![CDATA[<h3 id="力扣464题我能赢吗"><a href="#力扣464题我能赢吗" class="headerlink" title="力扣464题我能赢吗"></a>力扣464题我能赢吗</h3><p><strong>题目描述：</strong></p>
-<p>在 “100 game” 这个游戏中，两名玩家轮流选择从 1 到 10 的任意整数，累计整数和，先使得累计整数和达到 100 的玩家，即为胜者。</p>
-<p>如果我们将游戏规则改为 “玩家不能重复使用整数” 呢？</p>
-<p>例如，两个玩家可以轮流从公共整数池中抽取从 1 到 15 的整数（不放回），直到累计整数和 &gt;= 100。</p>
-<p>给定一个整数 maxChoosableInteger （整数池中可选择的最大数）和另一个整数 desiredTotal（累计和），判断先出手的玩家是否能稳赢（假设两位玩家游戏时都表现最佳）？</p>
-<p>你可以假设 maxChoosableInteger 不会大于 20， desiredTotal 不会大于 300。</p>
-<p>示例：</p>
-<blockquote>
-<p>输入：</p>
-<p>maxChoosableInteger = 10<br>desiredTotal = 11</p>
-<p>输出：<br>false</p>
-<p>解释：<br>无论第一个玩家选择哪个整数，他都会失败。<br>第一个玩家可以选择从 1 到 10 的整数。<br>如果第一个玩家选择 1，那么第二个玩家只能选择从 2 到 10 的整数。<br>第二个玩家可以通过选择整数 10（那么累积和为 11 &gt;= desiredTotal），从而取得胜利.<br>同样地，第一个玩家选择任意其他整数，第二个玩家都会赢。</p>
-</blockquote>
-<p><strong>题解：</strong></p>
-<p>看题目需求是要看看第一个玩家能不能赢，所以我们只需要直到有没有一种情况能够使他获胜就可以了。找到一宗情况就可以返回了，在解题种使用了记忆化回溯的方法（也称之为递归+备忘录），他是动态规划的一种，我们既然是记忆那么记忆的是什么数据，我们需要记忆的是一种情况，假设我们先选择了2然后第二次选择了3这种情况其实和我们第一次先选择了3然后第二次选择2是一样的效果，所以我们需要对其中一种情况进行记录，并将其放入map种每次进来我们先去判断map种存不存在相同的情况，那么我们想我们的key是什么呢，我们可以定义一个数组，这个数组只存放1或者0如果是1则代表了该位置的数据被访问过了，如果是0则表示第一次被访问，通过这个数组我们可以控制数据只被访问一次，同时我们利用这个数组转为字符串作为map的key，value就是能否赢得胜利，上边的选择2,3的两种情况其实都可以用011来作为key。</p>
-<p>再来看我们对于递归的解析，假设传入的累计和位10且玩家1选择了1这个数字，那么还剩下2-10这几个数字玩家2选择，也就是我们题目转换成了玩家2从2-10种选择一个数字看是否能够取得胜利，假设当玩家2 选择了2这个数字，那么玩家1就需要从3-10种选择出某个数字来看能够取得胜利，依次类推下去。我们发现可以使用递归的方式来解决这个问题，因为这时除了选择数据的区间不一样其余的都是一样的效果。</p>
-<p>我们再来看玩家1赢得胜利的条件是什么，玩家1在选择了某个值后能够赢得胜利的条件就是此时累计和已经达到要求了，或者是对方在剩余的区间选择种输了，可能会有疑问，为什么玩家2输了，玩家1一定会赢呢，因为我们做了判断我们的数组的累计和一定比需要的累计和大，所以这就变成了一个非赢即输的游戏。</p>
-<p><strong>代码示例</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"> <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 记忆化回溯（也称为递归+备忘录），自顶向下</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 采用记忆化后的时间复杂度为O(2^n)(如果不进行记忆的话，时间复杂度将是O(n!))，可以理解为已经缩成了只有一个分支了</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 然后为什么要进行记忆化：</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 因为我们发现，例如[2,3]和[3,2]之后的玩家选择状态都是一样的，都是可以从除了2,3之外的</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 数字进行选择，那么就可以对选择2和3后第一个玩家能不能赢进行记忆存储</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 这里采用state[]数组存储每个数字是否都被选过，选过则记录为1，然后我们将state.toString()</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 使得[2,3]和[3,2]它们的结果都是一样的"0011"，作为key，存储在HashMap中，value是选了2和3</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 之后第一个玩家是否稳赢</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> maxChoosableInteger</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> desiredTotal</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">canIWin</span><span class="params">(<span class="keyword">int</span> maxChoosableInteger, <span class="keyword">int</span> desiredTotal)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (maxChoosableInteger &gt;= desiredTotal) <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//1,..maxChoosable数列总和都比目标和小</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> ((<span class="number">1</span> + maxChoosableInteger) * maxChoosableInteger / <span class="number">2</span> &lt; desiredTotal) <span class="keyword">return</span> <span class="keyword">false</span>; </span><br><span class="line"></span><br><span class="line">        <span class="comment">//state[1]=1表示1被选了</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span>[] state = <span class="keyword">new</span> <span class="keyword">int</span>[maxChoosableInteger + <span class="number">1</span>]; </span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> backtraceWitMemo(state, desiredTotal, <span class="keyword">new</span> HashMap&lt;String, Boolean&gt;());</span><br><span class="line"></span><br><span class="line">        </span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">boolean</span> <span class="title">backtraceWitMemo</span><span class="params">(<span class="keyword">int</span>[] state, <span class="keyword">int</span> desiredTotal, HashMap&lt;String, Boolean&gt; map)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">         <span class="comment">//这里比较关键，如何表示这个唯一的状态，例如[2,3]和[3,2]都是"0011"，状态一样</span></span><br><span class="line"></span><br><span class="line">        String key = Arrays.toString(state);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//如果已经记忆了这样下去的输赢结果,记忆是为了防止如[2,3]，[3,2]之后的[1,4,5,..]这个选择区间被重复计算</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (map.containsKey(key)) <span class="keyword">return</span> map.get(key);  </span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; state.length; i++)&#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (state[i] == <span class="number">0</span>)&#123; <span class="comment">//如果这个数字i还没有被选中</span></span><br><span class="line"></span><br><span class="line">                state[i] = <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//如果当前选了i已经赢了或者选了i还没赢但是后面对方选择输了</span></span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (desiredTotal - i &lt;= <span class="number">0</span> || !backtraceWitMemo(state, desiredTotal - i, map)) &#123;</span><br><span class="line"></span><br><span class="line">                    map.put(key, <span class="keyword">true</span>);</span><br><span class="line">    </span><br><span class="line">                     <span class="comment">//在返回之前回溯</span></span><br><span class="line"></span><br><span class="line">                    state[i] = <span class="number">0</span>;</span><br><span class="line">                    <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">                &#125;</span><br><span class="line">    </span><br><span class="line">                <span class="comment">//如果不能赢也要记得回溯</span></span><br><span class="line"></span><br><span class="line">                state[i] = <span class="number">0</span>;</span><br><span class="line">    </span><br><span class="line">            &#125;</span><br><span class="line">    </span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//如果都赢不了</span></span><br><span class="line">    </span><br><span class="line">        map.put(key, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">    </span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-]]></content>
-  </entry>
-  <entry>
-    <title>十大排序算法</title>
-    <url>/2020/08/16/%E5%8D%81%E5%A4%A7%E6%8E%92%E5%BA%8F%E7%AE%97%E6%B3%95/</url>
+    <title>排序算法</title>
+    <url>/2020/06/09/%E5%8D%81%E5%A4%A7%E6%8E%92%E5%BA%8F%E7%AE%97%E6%B3%95/</url>
     <content><![CDATA[<h3 id="十大排序算法"><a href="#十大排序算法" class="headerlink" title="十大排序算法"></a>十大排序算法</h3><ul>
 <li><p><strong>简单选择算法</strong></p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">selectSort</span><span class="params">(<span class="keyword">int</span>[] arr)</span> </span>&#123;</span><br><span class="line">  </span><br><span class="line">       <span class="keyword">int</span> minINdex = <span class="number">0</span>;</span><br><span class="line">       <span class="keyword">int</span> temp;</span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line">         </span><br><span class="line">           <span class="keyword">for</span> (<span class="keyword">int</span> j = i + <span class="number">1</span>; j &lt; arr.length; j++) &#123;</span><br><span class="line"></span><br><span class="line">               <span class="keyword">if</span> (arr[i] &gt; arr[j]) &#123;</span><br><span class="line">                   minINdex = j;</span><br><span class="line">               &#125;</span><br><span class="line">           &#125;</span><br><span class="line">           <span class="comment">//此时不是最小值进行交换</span></span><br><span class="line">           <span class="keyword">if</span> (minINdex != i) &#123;</span><br><span class="line">               temp = arr[minINdex];</span><br><span class="line">               arr[minINdex] = arr[i];</span><br><span class="line">               arr[i] = temp;</span><br><span class="line">           &#125;</span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
@@ -349,108 +430,47 @@
 <p>冒泡排序是一种比较简单的排序算法，原理就是我们进行了嵌套循环，我们不断的比较挑出最大的元素往后移动直到数组最后的位置，就像冒泡一样不断向上。</p>
 <ul>
 <li><p><strong>基数排序</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">    * 基数排序的队列实现</span></span><br><span class="line"><span class="comment">    * 基数排序适合于数据位数不一样的数据进行排序</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line"></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">baseSortByQueue</span><span class="params">(<span class="keyword">int</span>[] arr)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> maxData = arr[<span class="number">0</span>];</span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">if</span> (maxData &lt; arr[i]) &#123;</span><br><span class="line"></span><br><span class="line">               maxData = arr[i];</span><br><span class="line"></span><br><span class="line">           &#125;</span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line">       Queue&lt;Integer&gt;[] myqueue = <span class="keyword">new</span> LinkedBlockingDeque[<span class="number">9</span>];</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> length = (maxData + <span class="string">""</span>).length();</span><br><span class="line"></span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>, n = <span class="number">1</span>; j &lt;= length; j++, n = n * <span class="number">10</span>) &#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">for</span> (<span class="keyword">int</span> l = <span class="number">0</span>; l &lt; arr.length; l++) &#123;</span><br><span class="line"></span><br><span class="line">               <span class="keyword">int</span> index = arr[l] / n % <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">               myqueue[index].offer(arr[l]);</span><br><span class="line">           &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> index = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> m = <span class="number">0</span>; m &lt; myqueue.length; m++) &#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">while</span> (!myqueue[m].isEmpty()) &#123;</span><br><span class="line"></span><br><span class="line">               arr[index] = myqueue[m].poll();</span><br><span class="line">               index++;</span><br><span class="line">           &#125;</span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">    * 基数排序的队列实现</span></span><br><span class="line"><span class="comment">    * 基数排序适合于数据位数不一样的数据进行排序</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line"></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">baseSortByQueue</span><span class="params">(<span class="keyword">int</span>[] arr)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> maxData = arr[<span class="number">0</span>];</span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">if</span> (maxData &lt; arr[i]) &#123;</span><br><span class="line"></span><br><span class="line">               maxData = arr[i];</span><br><span class="line"></span><br><span class="line">           &#125;</span><br><span class="line"></span><br><span class="line">       &#125;</span><br><span class="line">       Queue&lt;Integer&gt;[] myqueue = <span class="keyword">new</span> LinkedBlockingDeque[<span class="number">9</span>];</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> length = (maxData + <span class="string">""</span>).length();</span><br><span class="line"></span><br><span class="line">       <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>, n = <span class="number">1</span>; j &lt;= length; j++, n = n * <span class="number">10</span>) &#123;</span><br><span class="line"></span><br><span class="line">           <span class="keyword">for</span> (<span class="keyword">int</span> l = <span class="number">0</span>; l &lt; arr.length; l++) &#123;</span><br><span class="line"></span><br><span class="line">               <span class="keyword">int</span> index = arr[l] / n % <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">               myqueue[index].offer(arr[l]);</span><br><span class="line">           &#125;</span><br></pre></td></tr></table></figure>
 
 
 </li>
 </ul>
-<ul>
-<li><p><strong>桶排序</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">bucketSort</span><span class="params">(<span class="keyword">int</span>[] arr)</span> </span>&#123; </span><br><span class="line"><span class="comment">//找出数组中的最大元素和最小元素</span></span><br><span class="line">  <span class="keyword">int</span> min = arr[<span class="number">0</span>];</span><br><span class="line">  <span class="keyword">int</span> max = arr[<span class="number">0</span>];</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line">      max = Math.max(max, arr[i]);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//计算桶的个数</span></span><br><span class="line">  <span class="keyword">int</span> length = (max - min) / arr.length + <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//为了计算简单此处不再使用二维数组，直接采用list嵌套list的形式来进行存储</span></span><br><span class="line">  List&lt;ArrayList&lt;Integer&gt;&gt; arrayLists = <span class="keyword">new</span> ArrayList&lt;&gt;(length);</span><br><span class="line"></span><br><span class="line">  <span class="comment">//开始构建length个桶</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; length; j++) &#123;</span><br><span class="line">      arrayLists.add(<span class="keyword">new</span> ArrayList&lt;&gt;());</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 将每个元素放入桶</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line">      <span class="keyword">int</span> num = (arr[i] - min) / (arr.length);</span><br><span class="line">      arrayLists.get(num).add(arr[i]);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 对每个桶进行排序</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; arrayLists.size(); i++) &#123;</span><br><span class="line">      Collections.sort(arrayLists.get(i));</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 将桶中的元素赋值到原序列</span></span><br><span class="line">  <span class="keyword">int</span> index = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; arrayLists.size(); i++) &#123;</span><br><span class="line">      <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; arrayLists.get(i).size(); j++) &#123;</span><br><span class="line">          arr[index++] = arrayLists.get(i).get(j);</span><br><span class="line">      &#125;</span><br><span class="line">  &#125; </span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+<pre><code>      }
+
+      int index = 0;
+
+      for (int m = 0; m &lt; myqueue.length; m++) {
+
+          while (!myqueue[m].isEmpty()) {
+
+              arr[index] = myqueue[m].poll();
+              index++;
+          }
+
+      }
+
+  }</code></pre>
+  <figure class="highlight plain"><table><tr><td class="code"><pre><span class="line"></span><br><span class="line"></span><br><span class="line">* **桶排序**</span><br><span class="line"></span><br><span class="line">  &#96;&#96;&#96;java</span><br><span class="line">  public static void bucketSort(int[] arr) &#123; </span><br><span class="line">  &#x2F;&#x2F;找出数组中的最大元素和最小元素</span><br><span class="line">    int min &#x3D; arr[0];</span><br><span class="line">    int max &#x3D; arr[0];</span><br><span class="line">    for (int i &#x3D; 0; i &lt; arr.length; i++) &#123;</span><br><span class="line">        max &#x3D; Math.max(max, arr[i]);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    &#x2F;&#x2F;计算桶的个数</span><br><span class="line">    int length &#x3D; (max - min) &#x2F; arr.length + 1;</span><br><span class="line"></span><br><span class="line">    &#x2F;&#x2F;为了计算简单此处不再使用二维数组，直接采用list嵌套list的形式来进行存储</span><br><span class="line">    List&lt;ArrayList&lt;Integer&gt;&gt; arrayLists &#x3D; new ArrayList&lt;&gt;(length);</span><br><span class="line"></span><br><span class="line">    &#x2F;&#x2F;开始构建length个桶</span><br><span class="line">    for (int j &#x3D; 0; j &lt; length; j++) &#123;</span><br><span class="line">        arrayLists.add(new ArrayList&lt;&gt;());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    &#x2F;&#x2F; 将每个元素放入桶</span><br><span class="line">    for (int i &#x3D; 0; i &lt; arr.length; i++) &#123;</span><br><span class="line">        int num &#x3D; (arr[i] - min) &#x2F; (arr.length);</span><br><span class="line">        arrayLists.get(num).add(arr[i]);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    &#x2F;&#x2F; 对每个桶进行排序</span><br><span class="line">    for (int i &#x3D; 0; i &lt; arrayLists.size(); i++) &#123;</span><br><span class="line">        Collections.sort(arrayLists.get(i));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    &#x2F;&#x2F; 将桶中的元素赋值到原序列</span><br><span class="line">    int index &#x3D; 0;</span><br><span class="line">    for (int i &#x3D; 0; i &lt; arrayLists.size(); i++) &#123;</span><br><span class="line">        for (int j &#x3D; 0; j &lt; arrayLists.get(i).size(); j++) &#123;</span><br><span class="line">            arr[index++] &#x3D; arrayLists.get(i).get(j);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; </span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
 
 
-</li>
-</ul>
 <p>桶排序的实现思路也比较简单，他是一种以空间换取时间的算法实现，这种排序算法的局限性也是比较大的，它适用于数组元素的最大值和最小值相差不是非常大的情况（也就是所说的数据比较集种的情况），就是用最大元素减去最小元素</p>
 <ul>
 <li><p><strong>计数排序</strong></p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">countSort</span><span class="params">(<span class="keyword">int</span>[] arr)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//找出数组中的最大元素和最小元素</span></span><br><span class="line">    <span class="keyword">int</span> min = arr[<span class="number">0</span>];</span><br><span class="line">    <span class="keyword">int</span> max = arr[<span class="number">0</span>];</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (arr[i] &lt; min) &#123;</span><br><span class="line">            min = arr[i];</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (arr[i] &gt; max) &#123;</span><br><span class="line">            max = arr[i];</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//得出对应的数组的长度</span></span><br><span class="line">    <span class="keyword">int</span> d = max - min;</span><br><span class="line">    <span class="comment">//创建统计数组  并计算统计对应元素个数</span></span><br><span class="line">    <span class="keyword">int</span>[] countArray = <span class="keyword">new</span> <span class="keyword">int</span>[d + <span class="number">1</span>];</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; arr.length; j++) &#123;</span><br><span class="line">        countArray[arr[j] - min]++;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//对统计数组进行变形 后边的元素等于前边的元素之和</span></span><br><span class="line">    <span class="keyword">int</span> sum = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> m = <span class="number">0</span>; m &lt; countArray.length; m++) &#123;</span><br><span class="line">        sum += countArray[m];</span><br><span class="line">        countArray[m] = sum;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//对原始数组倒序</span></span><br><span class="line">    <span class="keyword">int</span>[] sortArray = <span class="keyword">new</span> <span class="keyword">int</span>[arr.length];</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt;= arr.length - <span class="number">1</span>; i++) &#123;</span><br><span class="line">        sortArray[countArray[arr[i] - min] - <span class="number">1</span>] = arr[i];</span><br><span class="line">        countArray[arr[i] - min]--;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    System.arraycopy(sortArray, <span class="number">0</span>, arr, <span class="number">0</span>, sortArray.length);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><strong>堆排序</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 堆排序代码实现</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;</span></span><br><span class="line"><span class="comment"> * 顺序存储的二叉树有这么几个特点(通常只考虑完全二叉树)：</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;</span></span><br><span class="line"><span class="comment"> * 第n个元素的左子节点为2*n+1</span></span><br><span class="line"><span class="comment"> * 第n个元素的右子节点为2*n+2</span></span><br><span class="line"><span class="comment"> * 第n个元素的父节点为(n-1)/2</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">heapSort</span><span class="params">(<span class="keyword">int</span>[] arr)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//计算开始位置，从最后一层叶子节点的父节点开始遍历  因为是要索引所以-2</span></span><br><span class="line">    <span class="keyword">int</span> start = (arr.length - <span class="number">2</span>) / <span class="number">2</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//第一次首先将其调整为大顶堆</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = start; i &lt; arr.length - <span class="number">1</span>; i++) &#123;</span><br><span class="line">        heapMax(arr, arr.length, i);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = arr.length - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span> temp = arr[i];</span><br><span class="line"></span><br><span class="line">        arr[i] = arr[<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">        arr[<span class="number">0</span>] = temp;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//因为第一次操作以后已经构成了大顶堆，所以每次可以从0向后进行调整</span></span><br><span class="line">        heapMax(arr, i, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 找出大顶堆</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;</span></span><br><span class="line"><span class="comment"> * 顺序存储的二叉树有这么几个特点(通常只考虑完全二叉树)：</span></span><br><span class="line"><span class="comment"> * &lt;p&gt;</span></span><br><span class="line"><span class="comment"> * 第n个元素的左子节点为2*n+1</span></span><br><span class="line"><span class="comment"> * 第n个元素的右子节点为2*n+2</span></span><br><span class="line"><span class="comment"> * 第n个元素的父节点为(n-1)/2</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">heapMax</span><span class="params">(<span class="keyword">int</span>[] arr, <span class="keyword">int</span> size, <span class="keyword">int</span> index)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (index &lt; size) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//找出左子树和右子树的位置坐标</span></span><br><span class="line">        <span class="keyword">int</span> leftNode = <span class="number">2</span> * index + <span class="number">1</span>;</span><br><span class="line">        <span class="keyword">int</span> rightNode = <span class="number">2</span> * index + <span class="number">2</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//一开始默认当前节点为最大值</span></span><br><span class="line">        <span class="keyword">int</span> max = index;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (leftNode &lt; size &amp;&amp; arr[max] &lt; arr[leftNode]) &#123;</span><br><span class="line">            max = leftNode;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (rightNode &lt; size &amp;&amp; arr[max] &lt; arr[rightNode]) &#123;</span><br><span class="line">            max = rightNode;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (max != index) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">int</span> temp = arr[max];</span><br><span class="line"></span><br><span class="line">            arr[max] = arr[index];</span><br><span class="line"></span><br><span class="line">            arr[index] = temp;</span><br><span class="line"></span><br><span class="line">            <span class="comment">//这次交换可能导致了其子树的结构变化所以需要重新进行排序</span></span><br><span class="line">            heapMax(arr, size, max);</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
 
 </li>
 </ul>
+  <figure class="highlight plain"><table><tr><td class="code"><pre><span class="line"></span><br><span class="line">* **堆排序**</span><br><span class="line"></span><br><span class="line">  &#96;&#96;&#96;java</span><br><span class="line">  &#x2F;**</span><br><span class="line">   * 堆排序代码实现</span><br><span class="line">   * &lt;p&gt;</span><br><span class="line">   * 顺序存储的二叉树有这么几个特点(通常只考虑完全二叉树)：</span><br><span class="line">   * &lt;p&gt;</span><br><span class="line">   * 第n个元素的左子节点为2*n+1</span><br><span class="line">   * 第n个元素的右子节点为2*n+2</span><br><span class="line">   * 第n个元素的父节点为(n-1)&#x2F;2</span><br><span class="line">   *&#x2F;</span><br><span class="line">  public static void heapSort(int[] arr) &#123;</span><br><span class="line"></span><br><span class="line">      &#x2F;&#x2F;计算开始位置，从最后一层叶子节点的父节点开始遍历  因为是要索引所以-2</span><br><span class="line">      int start &#x3D; (arr.length - 2) &#x2F; 2;</span><br><span class="line"></span><br><span class="line">      &#x2F;&#x2F;第一次首先将其调整为大顶堆</span><br><span class="line">      for (int i &#x3D; start; i &lt; arr.length - 1; i++) &#123;</span><br><span class="line">          heapMax(arr, arr.length, i);</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">      for (int i &#x3D; arr.length - 1; i &gt;&#x3D; 0; i--) &#123;</span><br><span class="line"></span><br><span class="line">          int temp &#x3D; arr[i];</span><br><span class="line"></span><br><span class="line">          arr[i] &#x3D; arr[0];</span><br><span class="line"></span><br><span class="line">          arr[0] &#x3D; temp;</span><br><span class="line"></span><br><span class="line">          &#x2F;&#x2F;因为第一次操作以后已经构成了大顶堆，所以每次可以从0向后进行调整</span><br><span class="line">          heapMax(arr, i, 0);</span><br><span class="line"></span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  &#x2F;**</span><br><span class="line">   * 找出大顶堆</span><br><span class="line">   * &lt;p&gt;</span><br><span class="line">   * 顺序存储的二叉树有这么几个特点(通常只考虑完全二叉树)：</span><br><span class="line">   * &lt;p&gt;</span><br><span class="line">   * 第n个元素的左子节点为2*n+1</span><br><span class="line">   * 第n个元素的右子节点为2*n+2</span><br><span class="line">   * 第n个元素的父节点为(n-1)&#x2F;2</span><br><span class="line">   *&#x2F;</span><br><span class="line">  public static void heapMax(int[] arr, int size, int index) &#123;</span><br><span class="line"></span><br><span class="line">      if (index &lt; size) &#123;</span><br><span class="line"></span><br><span class="line">          &#x2F;&#x2F;找出左子树和右子树的位置坐标</span><br><span class="line">          int leftNode &#x3D; 2 * index + 1;</span><br><span class="line">          int rightNode &#x3D; 2 * index + 2;</span><br><span class="line"></span><br><span class="line">          &#x2F;&#x2F;一开始默认当前节点为最大值</span><br><span class="line">          int max &#x3D; index;</span><br><span class="line"></span><br><span class="line">          if (leftNode &lt; size &amp;&amp; arr[max] &lt; arr[leftNode]) &#123;</span><br><span class="line">              max &#x3D; leftNode;</span><br><span class="line">          &#125;</span><br><span class="line">          if (rightNode &lt; size &amp;&amp; arr[max] &lt; arr[rightNode]) &#123;</span><br><span class="line">              max &#x3D; rightNode;</span><br><span class="line">          &#125;</span><br><span class="line"></span><br><span class="line">          if (max !&#x3D; index) &#123;</span><br><span class="line"></span><br><span class="line">              int temp &#x3D; arr[max];</span><br><span class="line"></span><br><span class="line">              arr[max] &#x3D; arr[index];</span><br><span class="line"></span><br><span class="line">              arr[index] &#x3D; temp;</span><br><span class="line"></span><br><span class="line">              &#x2F;&#x2F;这次交换可能导致了其子树的结构变化所以需要重新进行排序</span><br><span class="line">              heapMax(arr, size, max);</span><br><span class="line"></span><br><span class="line">          &#125;</span><br><span class="line"></span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
 ]]></content>
-  </entry>
-  <entry>
-    <title>计算机中的二进制</title>
-    <url>/2020/08/16/%E8%AE%A1%E7%AE%97%E6%9C%BA%E4%B8%AD%E7%9A%84%E4%BA%8C%E8%BF%9B%E5%88%B6/</url>
-    <content><![CDATA[<h3 id="计算机中的二进制"><a href="#计算机中的二进制" class="headerlink" title="计算机中的二进制"></a>计算机中的二进制</h3><p>&nbsp; &nbsp; &nbsp; &nbsp; 之前总结过关于二进制的一些知识点，最近又看到关于二进制的一些知识点，想重新将其总结成博客。</p>
-<h4 id="1-关于二进制和十进制的转化"><a href="#1-关于二进制和十进制的转化" class="headerlink" title="1.关于二进制和十进制的转化"></a>1.关于二进制和十进制的转化</h4><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;关于二进制他分为有符号的二进制和无符号的二进制，这两者的区别就是无符号的二进制他的高位（左侧为高位，右侧为低位和十进制的高低位一样）含义就是代表了数字，而有符号的二进制的高位则是代表了符号位，如果是0表示正数，如果是1表示负数。</p>
-<ul>
-<li>二进制转为十进制：</li>
-</ul>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;通过上边的例子可以看出我们是如何通过二进制转为十进制的，转化方式就是从右边第一位开始为0次方，依次递增往左，然前边的系数就是当前位置对应的1或者0。</p>
-<blockquote>
-<p>例如：对于110这个二进制数据如果他是有符号的那么最高位1就代表了他是负数，那么转为十进制数据就是-2（-($1<em>2^1+0</em>2^0$)）前边符号位不要动，后边的10进行二进制转换，如果是无符号的那么转为十进制就是6（$1<em>2^2+1</em>2^1+0*2^0$）。</p>
-</blockquote>
-<ul>
-<li>十进制转为二进制</li>
-</ul>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;十进制转为二进制的主要思路就是用十进制的数据去除以2，然后记录所得到的余数，最后把所得到的余数从左右往左依次排列即可得到对应的二进制。</p>
-<blockquote>
-<p>例如：对于6这个十进制数据，首先用$6/2=3…….0$，然后用得到的商再3去除以2,$3/2=1……1$ ,最后用得到的1再去除以2即$1/2=0……1$ 此时的商是0就不必继续做除法了，然后我们把得到的余数进行从右向左依次排列即110。如果是负数的十进制，也是首先将数字转为二进制然后在最高位（最右边）再去补一位1。</p>
-</blockquote>
-<h4 id="2-关于二进制的原码、补码、反码"><a href="#2-关于二进制的原码、补码、反码" class="headerlink" title="2.关于二进制的原码、补码、反码"></a>2.关于二进制的原码、补码、反码</h4><p><strong>原码就是最为简单的机器数表示法，用最高位表示符号位，其他位存储该数的二进制的绝对值。如上边提到的110就是一个原码。</strong></p>
-<h6 id="原码的特点："><a href="#原码的特点：" class="headerlink" title="原码的特点："></a>原码的特点：</h6><ol>
-<li>表示直观易懂，与真值转换容易。</li>
-<li>源码中的0有两种表示形式，通常的原码的0用+0表示，但是如果在计算中出现了-0则需要硬件将-0变成+0。</li>
-<li>原码用来表示加减运算复杂，利用原码对l两数进行加法运算的时候需要判断两数的符号，使得同号相加异号相减。</li>
-<li>原码的相反数加上原码不等于0。</li>
-</ol>
-<p><strong>反码就是正数的反码还是等于原码；负数的反码就是它的原码除符号位外，按位取反。</strong></p>
-<blockquote>
-<p>例如：我们还是以0110为例，如果这是一个正数那么代表十进制的6，他的反码还是0110，如果是-6，那么他的原码应该是1110此时-6的反码是1001。此时我们来看，-6+6=110+1001=1111，此时得到的这个1111的最高位表示-，他也就是-0的相反数，也就是0。但是如果是-6+(-1)=1001+1110=10111这个10111是-8的反码，也就是意味着负数相加还是有问题的。</p>
-</blockquote>
-<h6 id="反码的特点"><a href="#反码的特点" class="headerlink" title="反码的特点"></a>反码的特点</h6><ol>
-<li>在反码中还是用最高位表示符号位，即0正1负。</li>
-<li>在反码中0有两种表现形式，也是+0和-0。</li>
-<li>反码的表示范围与原码的表示范围一样。</li>
-<li>反码解决了一个正数的相反数加这个正数正好等于0的问题，但是面临着另外一个问题，就是两个负数相加存在数据问题。</li>
-</ol>
-<p><strong>补码就是正数的补码等于他的原码，负数的补码等于反码+1。</strong></p>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;其实负数的补码等于反码+1只是补码的求法，而不是补码的定义，很多人以为求补码就要先求反码，其实并不是，那些计算机学家并不会心血来潮的把反码+1就定义为补码，只不过补码正好就等于反码+1而已。</p>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;其实补码的思想是非常巧妙的在《码农翻身》一书中这样推导介绍过补码：</p>
-<blockquote>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;在不考虑负数的情况下：如果我们有个4位的二进制数据110这个数据表示的是十进制的6，如果我们把4位全放上1我们可以表示的数是0-15，如果我们想算6-2那么我们可以直接用6+2的补数，此时2的补数就是16-2=14，这样我们可以利用6+14得到这个结果，6+14是个20此时已经发生了溢出即比我们表示的最大数15都已经大了，所以除去溢出的部分我们得到的结果位20-16=4，这样我们得到了最终的结果4。</p>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;即便我们利用二进制来进行计算也会得到同样的效果，即0110+1110=10100这是将最高位的1进行溢出得到0100就是我们十进制4。这种思想有点类似与我们的时钟，如果现在是7点我们想让他回到四点此时我们有两种方案，一种是退回到4点，另外一种是前进9格到达4点。这种方式就是数学中的取模操作。那么在无符号的情况下我们该如何计算补码呢，总不能每次按照位数进行减法运算，于是有一种适合计算机的计算补数的方法出来了，就是二进制所有位数取反然后加1（注：这个运算方式只适合无符号的计算。）</p>
-</blockquote>
-<blockquote>
-<p>&nbsp;&nbsp;&nbsp;&nbsp;但是在计算机中我们一般都是有符号的计算，如果在我们考虑负数的情况下：那么最高位就要表示符号位了，此时我们的四位就是可以表示-7到-0以及0-7，此时多了个-0，我们可以将-0当作-8来处理这样就可以表示的数是-8-7，此时我们求补数的逻辑也不应该是之前的那个逻辑了，计算补码应该是我们的符号位保持不变然后数据进行取反加1，如果此时我们来计算6-2那么在二进制中-2的原码应该是1010然后符号位不变得到1101，然后加1得到1110（其实这对应了我们十进制的-6）此时的计算应该是0110+1110=10100高位溢出得到0100即十进制的4。</p>
-</blockquote>
-<p>通过上边的分析我们可以看出我们此后对于相减的操作我们利用加法器就可以实现减法的操作，可以极大简化电路的设计，在计算机内部，我们就是利用了补码来进行二进制表示的，例如java中的Integer.toBinaryString这个ApI就是返回的补码。</p>
-<h4 id="3-二进制的位移操作以及或且非"><a href="#3-二进制的位移操作以及或且非" class="headerlink" title="3.二进制的位移操作以及或且非"></a>3.二进制的位移操作以及或且非</h4><ol>
-<li><p>“&gt;&gt;”这个符号是右移操作，右移表示缩小2的N次方</p>
-<p>往右移动即所有的二进制位往右移动两位以后高位补0，例如0000 0110&gt;&gt;2右移两位，得到0000 0001。</p>
-</li>
-<li><p>“&lt;&lt;”这个符号是左移操作，左移则表示放大2的N次方</p>
-<p>往左移动就是所有的二进制位往左移动两位低位补0，如0000 0110&lt;&lt;2得到0001 1000。</p>
-</li>
-<li><p>无符号右移( &gt;&gt;&gt; ) </p>
-<p>需要使用其补码进行计算，正数和上边一样操作，负数需要在高位补1。</p>
-</li>
-<li><p>无符号右移( &lt;&lt;&lt;) </p>
-<p>需要使用其补码进行计算，正数的补码等于自己，负数的补码不和负数一样。低位补0。</p>
-</li>
-<li><p>位与( &amp; )  </p>
-<p>第一个操作数的的第n位于第二个操作数的第n位如果都是1，那么结果的第n为也为1，否则为0</p>
-</li>
-<li><p>位或( | )</p>
-<p> 第一个操作数的的第n位于第二个操作数的第n位，只要有一个是1，那么结果的第n为也为1，否则为0</p>
-</li>
-<li><p>位异或( ^ )</p>
-<p>第一个操作数的的第n位于第二个操作数的第n位相反，那么结果的第n为也为1，否则为0</p>
-</li>
-<li><p>位非( ~ )</p>
-<p>操作数的第n位为1，那么结果的第n位为0，反之。</p>
-</li>
-</ol>
-]]></content>
+      <categories>
+        <category>数据结构与算法</category>
+      </categories>
   </entry>
   <entry>
     <title>背包九讲</title>
-    <url>/2020/08/16/%E8%83%8C%E5%8C%85%E4%B9%9D%E8%AE%B2/</url>
+    <url>/2020/06/09/%E8%83%8C%E5%8C%85%E4%B9%9D%E8%AE%B2/</url>
     <content><![CDATA[<h2 id="背包九讲"><a href="#背包九讲" class="headerlink" title="背包九讲"></a>背包九讲</h2><p>​    <strong>动态规划解题步骤（问题抽象化、建立模型、寻找约束条件、判断是否满足最优性原理、找大问题与小问题的递推关系式、填表、寻找解组成）。</strong></p>
 <ol>
 <li><p><strong>01背包问题</strong></p>
@@ -793,5 +813,113 @@
 <p>   ​    一个“主件”和它的附件集合，实际上是一个物品组，每一个选择某个“主件”或者“主件+附件”的策略，实际上相当于这个物品组中的一个物品，其费用和价值，都是策略中的物品的值的总和。这样的话，对于该简化描述的依赖背包问题的，可以转化为分组背包问题，参考分组背包问题的解决思路，可以解决该问题。</p>
 <p>   代码示例如下：</p>
    <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.Scanner;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PackageProblemRely</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        Scanner scanner = <span class="keyword">new</span> Scanner(System.in);</span><br><span class="line">        <span class="comment">// 总钱数</span></span><br><span class="line">        <span class="keyword">int</span> N = scanner.nextInt();</span><br><span class="line">        <span class="comment">// 购买物品个数</span></span><br><span class="line">        <span class="keyword">int</span> m = scanner.nextInt();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span>[] f = <span class="keyword">new</span> <span class="keyword">int</span>[N + <span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 分组，goods[i][0]为主件，goods[i][1]为附件1，goods[i][2]为附件2</span></span><br><span class="line"></span><br><span class="line">        Good[][] goods1 = <span class="keyword">new</span> Good[<span class="number">60</span>][<span class="number">4</span>];</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt;= m; i++) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">int</span> v = scanner.nextInt();</span><br><span class="line">            <span class="keyword">int</span> p = scanner.nextInt();</span><br><span class="line">            <span class="keyword">int</span> q = scanner.nextInt();</span><br><span class="line"></span><br><span class="line">            Good t = <span class="keyword">new</span> Good(v, v * p);</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (q == <span class="number">0</span>) &#123;</span><br><span class="line">                goods1[i][<span class="number">0</span>] = t;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">if</span> (goods1[q][<span class="number">1</span>] == <span class="keyword">null</span>) &#123;</span><br><span class="line">                    goods1[q][<span class="number">1</span>] = t;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    goods1[q][<span class="number">2</span>] = t;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt;= m; i++) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> j = N; j &gt;= <span class="number">0</span> &amp;&amp; goods1[i][<span class="number">0</span>] != <span class="keyword">null</span>; j--) &#123;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//以下代码从分组中选择价值最大的。共五种情况：不选主件，选主件，选附件1和主件，选附件2和主件，选附件1和附件2和主件</span></span><br><span class="line">                Good master = goods1[i][<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">                <span class="keyword">int</span> max = f[j];</span><br><span class="line">                <span class="keyword">if</span> (j &gt;= master.v) &#123;</span><br><span class="line">                    max=Math.max(max,f[j - master.v] + master.vp);</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//如果附件1不为null</span></span><br><span class="line">                <span class="keyword">int</span> vt;</span><br><span class="line">                <span class="keyword">if</span> (goods1[i][<span class="number">1</span>] != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (j &gt;= (vt = master.v + goods1[i][<span class="number">1</span>].v) )&#123;</span><br><span class="line">                        max = Math.max(max,f[j - vt] + master.vp + goods1[i][<span class="number">1</span>].vp);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//如果附件2不为null</span></span><br><span class="line">                <span class="keyword">if</span> (goods1[i][<span class="number">2</span>] != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (j &gt;= (vt = master.v + goods1[i][<span class="number">1</span>].v + goods1[i][<span class="number">2</span>].v)) &#123;</span><br><span class="line">                        max = Math.max(max,f[j - vt] + master.vp + goods1[i][<span class="number">1</span>].vp + goods1[i][<span class="number">2</span>].vp);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">                f[j] = max;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        System.out.println(f[N]);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Good</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> v;</span><br><span class="line">    <span class="keyword">int</span> vp;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">Good</span><span class="params">(<span class="keyword">int</span> v, <span class="keyword">int</span> vp)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.v = v;</span><br><span class="line">        <span class="keyword">this</span>.vp = vp;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>]]></content>
+      <categories>
+        <category>数据结构与算法</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>计算机种的二进制</title>
+    <url>/2020/09/24/%E8%AE%A1%E7%AE%97%E6%9C%BA%E4%B8%AD%E7%9A%84%E4%BA%8C%E8%BF%9B%E5%88%B6/</url>
+    <content><![CDATA[<h3 id="计算机中的二进制"><a href="#计算机中的二进制" class="headerlink" title="计算机中的二进制"></a>计算机中的二进制</h3><p>&nbsp; &nbsp; &nbsp; &nbsp; 之前总结过关于二进制的一些知识点，最近又看到关于二进制的一些知识点，想重新将其总结成博客。</p>
+<h4 id="1-关于二进制和十进制的转化"><a href="#1-关于二进制和十进制的转化" class="headerlink" title="1.关于二进制和十进制的转化"></a>1.关于二进制和十进制的转化</h4><p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;关于二进制他分为有符号的二进制和无符号的二进制，这两者的区别就是无符号的二进制他的高位（左侧为高位，右侧为低位和十进制的高低位一样）含义就是代表了数字，而有符号的二进制的高位则是代表了符号位，如果是0表示正数，如果是1表示负数。</p>
+<ul>
+<li>二进制转为十进制：</li>
+</ul>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;通过上边的例子可以看出我们是如何通过二进制转为十进制的，转化方式就是从右边第一位开始为0次方，依次递增往左，然前边的系数就是当前位置对应的1或者0。</p>
+<blockquote>
+<p>例如：对于110这个二进制数据如果他是有符号的那么最高位1就代表了他是负数，那么转为十进制数据就是-2（-($1<em>2^1+0</em>2^0$)）前边符号位不要动，后边的10进行二进制转换，如果是无符号的那么转为十进制就是6（$1<em>2^2+1</em>2^1+0*2^0$）。</p>
+</blockquote>
+<ul>
+<li>十进制转为二进制</li>
+</ul>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;十进制转为二进制的主要思路就是用十进制的数据去除以2，然后记录所得到的余数，最后把所得到的余数从左右往左依次排列即可得到对应的二进制。</p>
+<blockquote>
+<p>例如：对于6这个十进制数据，首先用$6/2=3…….0$，然后用得到的商再3去除以2,$3/2=1……1$ ,最后用得到的1再去除以2即$1/2=0……1$ 此时的商是0就不必继续做除法了，然后我们把得到的余数进行从右向左依次排列即110。如果是负数的十进制，也是首先将数字转为二进制然后在最高位（最右边）再去补一位1。</p>
+</blockquote>
+<h4 id="2-关于二进制的原码、补码、反码"><a href="#2-关于二进制的原码、补码、反码" class="headerlink" title="2.关于二进制的原码、补码、反码"></a>2.关于二进制的原码、补码、反码</h4><p><strong>原码就是最为简单的机器数表示法，用最高位表示符号位，其他位存储该数的二进制的绝对值。如上边提到的110就是一个原码。</strong></p>
+<h6 id="原码的特点："><a href="#原码的特点：" class="headerlink" title="原码的特点："></a>原码的特点：</h6><ol>
+<li>表示直观易懂，与真值转换容易。</li>
+<li>源码中的0有两种表示形式，通常的原码的0用+0表示，但是如果在计算中出现了-0则需要硬件将-0变成+0。</li>
+<li>原码用来表示加减运算复杂，利用原码对l两数进行加法运算的时候需要判断两数的符号，使得同号相加异号相减。</li>
+<li>原码的相反数加上原码不等于0。</li>
+</ol>
+<p><strong>反码就是正数的反码还是等于原码；负数的反码就是它的原码除符号位外，按位取反。</strong></p>
+<blockquote>
+<p>例如：我们还是以0110为例，如果这是一个正数那么代表十进制的6，他的反码还是0110，如果是-6，那么他的原码应该是1110此时-6的反码是1001。此时我们来看，-6+6=110+1001=1111，此时得到的这个1111的最高位表示-，他也就是-0的相反数，也就是0。但是如果是-6+(-1)=1001+1110=10111这个10111是-8的反码，也就是意味着负数相加还是有问题的。</p>
+</blockquote>
+<h6 id="反码的特点"><a href="#反码的特点" class="headerlink" title="反码的特点"></a>反码的特点</h6><ol>
+<li>在反码中还是用最高位表示符号位，即0正1负。</li>
+<li>在反码中0有两种表现形式，也是+0和-0。</li>
+<li>反码的表示范围与原码的表示范围一样。</li>
+<li>反码解决了一个正数的相反数加这个正数正好等于0的问题，但是面临着另外一个问题，就是两个负数相加存在数据问题。</li>
+</ol>
+<p><strong>补码就是正数的补码等于他的原码，负数的补码等于反码+1。</strong></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;其实负数的补码等于反码+1只是补码的求法，而不是补码的定义，很多人以为求补码就要先求反码，其实并不是，那些计算机学家并不会心血来潮的把反码+1就定义为补码，只不过补码正好就等于反码+1而已。</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;其实补码的思想是非常巧妙的在《码农翻身》一书中这样推导介绍过补码：</p>
+<blockquote>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;在不考虑负数的情况下：如果我们有个4位的二进制数据110这个数据表示的是十进制的6，如果我们把4位全放上1我们可以表示的数是0-15，如果我们想算6-2那么我们可以直接用6+2的补数，此时2的补数就是16-2=14，这样我们可以利用6+14得到这个结果，6+14是个20此时已经发生了溢出即比我们表示的最大数15都已经大了，所以除去溢出的部分我们得到的结果位20-16=4，这样我们得到了最终的结果4。</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;即便我们利用二进制来进行计算也会得到同样的效果，即0110+1110=10100这是将最高位的1进行溢出得到0100就是我们十进制4。这种思想有点类似与我们的时钟，如果现在是7点我们想让他回到四点此时我们有两种方案，一种是退回到4点，另外一种是前进9格到达4点。这种方式就是数学中的取模操作。那么在无符号的情况下我们该如何计算补码呢，总不能每次按照位数进行减法运算，于是有一种适合计算机的计算补数的方法出来了，就是二进制所有位数取反然后加1（注：这个运算方式只适合无符号的计算。）</p>
+</blockquote>
+<blockquote>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;但是在计算机中我们一般都是有符号的计算，如果在我们考虑负数的情况下：那么最高位就要表示符号位了，此时我们的四位就是可以表示-7到-0以及0-7，此时多了个-0，我们可以将-0当作-8来处理这样就可以表示的数是-8-7，此时我们求补数的逻辑也不应该是之前的那个逻辑了，计算补码应该是我们的符号位保持不变然后数据进行取反加1，如果此时我们来计算6-2那么在二进制中-2的原码应该是1010然后符号位不变得到1101，然后加1得到1110（其实这对应了我们十进制的-6）此时的计算应该是0110+1110=10100高位溢出得到0100即十进制的4。</p>
+</blockquote>
+<p>通过上边的分析我们可以看出我们此后对于相减的操作我们利用加法器就可以实现减法的操作，可以极大简化电路的设计，在计算机内部，我们就是利用了补码来进行二进制表示的，例如java中的Integer.toBinaryString这个ApI就是返回的补码。</p>
+<h4 id="3-二进制的位移操作以及或且非"><a href="#3-二进制的位移操作以及或且非" class="headerlink" title="3.二进制的位移操作以及或且非"></a>3.二进制的位移操作以及或且非</h4><ol>
+<li><p>“&gt;&gt;”这个符号是右移操作，右移表示缩小2的N次方</p>
+<p>往右移动即所有的二进制位往右移动两位以后高位补0，例如0000 0110&gt;&gt;2右移两位，得到0000 0001。</p>
+</li>
+<li><p>“&lt;&lt;”这个符号是左移操作，左移则表示放大2的N次方</p>
+<p>往左移动就是所有的二进制位往左移动两位低位补0，如0000 0110&lt;&lt;2得到0001 1000。</p>
+</li>
+<li><p>无符号右移( &gt;&gt;&gt; ) </p>
+<p>需要使用其补码进行计算，正数和上边一样操作，负数需要在高位补1。</p>
+</li>
+<li><p>无符号右移( &lt;&lt;&lt;) </p>
+<p>需要使用其补码进行计算，正数的补码等于自己，负数的补码不和负数一样。低位补0。</p>
+</li>
+<li><p>位与( &amp; )  </p>
+<p>第一个操作数的的第n位于第二个操作数的第n位如果都是1，那么结果的第n为也为1，否则为0</p>
+</li>
+<li><p>位或( | )</p>
+<p> 第一个操作数的的第n位于第二个操作数的第n位，只要有一个是1，那么结果的第n为也为1，否则为0</p>
+</li>
+<li><p>位异或( ^ )</p>
+<p>第一个操作数的的第n位于第二个操作数的第n位相反，那么结果的第n为也为1，否则为0</p>
+</li>
+<li><p>位非( ~ )</p>
+<p>操作数的第n位为1，那么结果的第n位为0，反之。</p>
+</li>
+</ol>
+]]></content>
+      <categories>
+        <category>计算机组成原理</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>我能赢吗</title>
+    <url>/2020/06/09/%E5%8A%9B%E6%89%A3464%E9%A2%98%E6%88%91%E8%83%BD%E8%B5%A2%E5%90%97/</url>
+    <content><![CDATA[<h3 id="力扣464题我能赢吗"><a href="#力扣464题我能赢吗" class="headerlink" title="力扣464题我能赢吗"></a>力扣464题我能赢吗</h3><p><strong>题目描述：</strong></p>
+<p>在 “100 game” 这个游戏中，两名玩家轮流选择从 1 到 10 的任意整数，累计整数和，先使得累计整数和达到 100 的玩家，即为胜者。</p>
+<p>如果我们将游戏规则改为 “玩家不能重复使用整数” 呢？</p>
+<p>例如，两个玩家可以轮流从公共整数池中抽取从 1 到 15 的整数（不放回），直到累计整数和 &gt;= 100。</p>
+<p>给定一个整数 maxChoosableInteger （整数池中可选择的最大数）和另一个整数 desiredTotal（累计和），判断先出手的玩家是否能稳赢（假设两位玩家游戏时都表现最佳）？</p>
+<p>你可以假设 maxChoosableInteger 不会大于 20， desiredTotal 不会大于 300。</p>
+<p>示例：</p>
+<blockquote>
+<p>输入：</p>
+<p>maxChoosableInteger = 10<br>desiredTotal = 11</p>
+<p>输出：<br>false</p>
+<p>解释：<br>无论第一个玩家选择哪个整数，他都会失败。<br>第一个玩家可以选择从 1 到 10 的整数。<br>如果第一个玩家选择 1，那么第二个玩家只能选择从 2 到 10 的整数。<br>第二个玩家可以通过选择整数 10（那么累积和为 11 &gt;= desiredTotal），从而取得胜利.<br>同样地，第一个玩家选择任意其他整数，第二个玩家都会赢。</p>
+</blockquote>
+<p><strong>题解：</strong></p>
+<p>看题目需求是要看看第一个玩家能不能赢，所以我们只需要直到有没有一种情况能够使他获胜就可以了。找到一宗情况就可以返回了，在解题种使用了记忆化回溯的方法（也称之为递归+备忘录），他是动态规划的一种，我们既然是记忆那么记忆的是什么数据，我们需要记忆的是一种情况，假设我们先选择了2然后第二次选择了3这种情况其实和我们第一次先选择了3然后第二次选择2是一样的效果，所以我们需要对其中一种情况进行记录，并将其放入map种每次进来我们先去判断map种存不存在相同的情况，那么我们想我们的key是什么呢，我们可以定义一个数组，这个数组只存放1或者0如果是1则代表了该位置的数据被访问过了，如果是0则表示第一次被访问，通过这个数组我们可以控制数据只被访问一次，同时我们利用这个数组转为字符串作为map的key，value就是能否赢得胜利，上边的选择2,3的两种情况其实都可以用011来作为key。</p>
+<p>再来看我们对于递归的解析，假设传入的累计和位10且玩家1选择了1这个数字，那么还剩下2-10这几个数字玩家2选择，也就是我们题目转换成了玩家2从2-10种选择一个数字看是否能够取得胜利，假设当玩家2 选择了2这个数字，那么玩家1就需要从3-10种选择出某个数字来看能够取得胜利，依次类推下去。我们发现可以使用递归的方式来解决这个问题，因为这时除了选择数据的区间不一样其余的都是一样的效果。</p>
+<p>我们再来看玩家1赢得胜利的条件是什么，玩家1在选择了某个值后能够赢得胜利的条件就是此时累计和已经达到要求了，或者是对方在剩余的区间选择种输了，可能会有疑问，为什么玩家2输了，玩家1一定会赢呢，因为我们做了判断我们的数组的累计和一定比需要的累计和大，所以这就变成了一个非赢即输的游戏。</p>
+<p><strong>代码示例</strong></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"> <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Solution</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 记忆化回溯（也称为递归+备忘录），自顶向下</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 采用记忆化后的时间复杂度为O(2^n)(如果不进行记忆的话，时间复杂度将是O(n!))，可以理解为已经缩成了只有一个分支了</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 然后为什么要进行记忆化：</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 因为我们发现，例如[2,3]和[3,2]之后的玩家选择状态都是一样的，都是可以从除了2,3之外的</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 数字进行选择，那么就可以对选择2和3后第一个玩家能不能赢进行记忆存储</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 这里采用state[]数组存储每个数字是否都被选过，选过则记录为1，然后我们将state.toString()</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 使得[2,3]和[3,2]它们的结果都是一样的"0011"，作为key，存储在HashMap中，value是选了2和3</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * 之后第一个玩家是否稳赢</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> maxChoosableInteger</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> desiredTotal</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">canIWin</span><span class="params">(<span class="keyword">int</span> maxChoosableInteger, <span class="keyword">int</span> desiredTotal)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (maxChoosableInteger &gt;= desiredTotal) <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//1,..maxChoosable数列总和都比目标和小</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> ((<span class="number">1</span> + maxChoosableInteger) * maxChoosableInteger / <span class="number">2</span> &lt; desiredTotal) <span class="keyword">return</span> <span class="keyword">false</span>; </span><br><span class="line"></span><br><span class="line">        <span class="comment">//state[1]=1表示1被选了</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span>[] state = <span class="keyword">new</span> <span class="keyword">int</span>[maxChoosableInteger + <span class="number">1</span>]; </span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> backtraceWitMemo(state, desiredTotal, <span class="keyword">new</span> HashMap&lt;String, Boolean&gt;());</span><br><span class="line"></span><br><span class="line">        </span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">boolean</span> <span class="title">backtraceWitMemo</span><span class="params">(<span class="keyword">int</span>[] state, <span class="keyword">int</span> desiredTotal, HashMap&lt;String, Boolean&gt; map)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">         <span class="comment">//这里比较关键，如何表示这个唯一的状态，例如[2,3]和[3,2]都是"0011"，状态一样</span></span><br><span class="line"></span><br><span class="line">        String key = Arrays.toString(state);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//如果已经记忆了这样下去的输赢结果,记忆是为了防止如[2,3]，[3,2]之后的[1,4,5,..]这个选择区间被重复计算</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (map.containsKey(key)) <span class="keyword">return</span> map.get(key);  </span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; state.length; i++)&#123;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (state[i] == <span class="number">0</span>)&#123; <span class="comment">//如果这个数字i还没有被选中</span></span><br><span class="line"></span><br><span class="line">                state[i] = <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">                <span class="comment">//如果当前选了i已经赢了或者选了i还没赢但是后面对方选择输了</span></span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (desiredTotal - i &lt;= <span class="number">0</span> || !backtraceWitMemo(state, desiredTotal - i, map)) &#123;</span><br><span class="line"></span><br><span class="line">                    map.put(key, <span class="keyword">true</span>);</span><br><span class="line">    </span><br><span class="line">                     <span class="comment">//在返回之前回溯</span></span><br><span class="line"></span><br><span class="line">                    state[i] = <span class="number">0</span>;</span><br><span class="line">                    <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">                &#125;</span><br><span class="line">    </span><br><span class="line">                <span class="comment">//如果不能赢也要记得回溯</span></span><br><span class="line"></span><br><span class="line">                state[i] = <span class="number">0</span>;</span><br><span class="line">    </span><br><span class="line">            &#125;</span><br><span class="line">    </span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//如果都赢不了</span></span><br><span class="line">    </span><br><span class="line">        map.put(key, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">    </span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+]]></content>
+      <categories>
+        <category>数据结构与算法</category>
+      </categories>
   </entry>
 </search>
