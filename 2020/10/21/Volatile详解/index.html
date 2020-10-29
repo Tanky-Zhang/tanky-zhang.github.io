@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+
+    
+
+    
+
+
+
+    <meta charset="utf-8">
+    
+    
+    
+    
+    <title>Volatile详解 | tanky | 软件开发的小学生</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    
+    <meta name="theme-color" content="#5b5b5e">
+    
+    
+    <meta name="keywords" content="">
+    <meta name="description" content="Volatile详解一、Intel硬件提供了一系列的内存屏障： lfence，是一种Load Barrier 读屏障  sfence, 是一种Store Barrier 写屏障  mfence, 是一种全能型的屏障，具备ifence和sfence的能力  Lock前缀，Lock不是一种内存屏障，但是它能完成类似内存屏障的功能。Lock会对CPU总线和高速缓存加锁，可以理解为CPU指令级的一种锁。它">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Volatile详解">
+<meta property="og:url" content="http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/index.html">
+<meta property="og:site_name" content="tanky">
+<meta property="og:description" content="Volatile详解一、Intel硬件提供了一系列的内存屏障： lfence，是一种Load Barrier 读屏障  sfence, 是一种Store Barrier 写屏障  mfence, 是一种全能型的屏障，具备ifence和sfence的能力  Lock前缀，Lock不是一种内存屏障，但是它能完成类似内存屏障的功能。Lock会对CPU总线和高速缓存加锁，可以理解为CPU指令级的一种锁。它">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="c:/Users/zhangzhg02/Desktop/1.png">
+<meta property="article:published_time" content="2020-10-21T00:48:39.497Z">
+<meta property="article:modified_time" content="2020-10-21T08:48:59.042Z">
+<meta property="article:author" content="TankyZhang">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="c:/Users/zhangzhg02/Desktop/1.png">
+    
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="stylesheet" href="//unpkg.com/hexo-theme-material-indigo@latest/css/style.css">
+    <script>window.lazyScripts=[]</script>
+
+    <!-- custom head -->
+    
+
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+    <div id="loading" class="active"></div>
+
+    <aside id="menu" class="hide" >
+  <div class="inner flex-row-vertical">
+    <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
+        <i class="icon icon-lg icon-close"></i>
+    </a>
+    <div class="brand-wrap" style="background-image:url(/img/brand1.jpg)">
+      <div class="brand">
+        <a href="/" class="avatar waves-effect waves-circle waves-light">
+          <img src="/images/dog.jpg">
+        </a>
+        <hgroup class="introduce">
+          <h5 class="nickname">TankyZhang</h5>
+          <a href="mailto:1969751050@qq.com" title="1969751050@qq.com" class="mail">1969751050@qq.com</a>
+        </hgroup>
+      </div>
+    </div>
+    <div class="scroll-wrap flex-col">
+      <ul class="nav">
+        
+            <li class="waves-block waves-effect">
+              <a href="/"  >
+                <i class="icon icon-lg icon-home"></i>
+                主页
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="/archives"  >
+                <i class="icon icon-lg icon-archives"></i>
+                归档
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="/tags"  >
+                <i class="icon icon-lg icon-tags"></i>
+                标签
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="/categories"  >
+                <i class="icon icon-lg icon-th-list"></i>
+                分类
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="https://github.com/tanky-zhang" target="_blank" >
+                <i class="icon icon-lg icon-github"></i>
+                Github
+              </a>
+            </li>
+        
+            <li class="waves-block waves-effect">
+              <a href="http://www.weibo.com/tanky-zhang" target="_blank" >
+                <i class="icon icon-lg icon-weibo"></i>
+                Weibo
+              </a>
+            </li>
+        
+      </ul>
+    </div>
+  </div>
+</aside>
+
+    <main id="main">
+        <header class="top-header" id="header">
+    <div class="flex-row">
+        <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light on" id="menu-toggle">
+          <i class="icon icon-lg icon-navicon"></i>
+        </a>
+        <div class="flex-col header-title ellipsis">Volatile详解</div>
+        
+        <div class="search-wrap" id="search-wrap">
+            <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="back">
+                <i class="icon icon-lg icon-chevron-left"></i>
+            </a>
+            <input type="text" id="key" class="search-input" autocomplete="off" placeholder="输入感兴趣的关键字">
+            <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="search">
+                <i class="icon icon-lg icon-search"></i>
+            </a>
+        </div>
+        
+        
+        <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="menuShare">
+            <i class="icon icon-lg icon-share-alt"></i>
+        </a>
+        
+    </div>
+</header>
+<header class="content-header post-header">
+
+    <div class="container fade-scale">
+        <h1 class="title">Volatile详解</h1>
+        <h5 class="subtitle">
+            
+                <time datetime="2020-10-21T00:48:39.497Z" itemprop="datePublished" class="page-time">
+  2020-10-21
+</time>
+
+
+            
+        </h5>
+    </div>
+
+    
+
+
+</header>
+
+
+<div class="container body-wrap">
+    
+    <aside class="post-widget">
+        <nav class="post-toc-wrap post-toc-shrink" id="post-toc">
+            <h4>TOC</h4>
+            <ol class="post-toc"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#Volatile详解"><span class="post-toc-number">1.</span> <span class="post-toc-text">Volatile详解</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-4"><a class="post-toc-link" href="#一、Intel硬件提供了一系列的内存屏障："><span class="post-toc-number">1.0.1.</span> <span class="post-toc-text">一、Intel硬件提供了一系列的内存屏障：</span></a></li><li class="post-toc-item post-toc-level-4"><a class="post-toc-link" href="#二、Votile保证了有序性、可见性"><span class="post-toc-number">1.0.2.</span> <span class="post-toc-text">二、Votile保证了有序性、可见性</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-5"><a class="post-toc-link" href="#1-为什么会发生不可见这种情况"><span class="post-toc-number">1.0.2.1.</span> <span class="post-toc-text">1.为什么会发生不可见这种情况</span></a></li><li class="post-toc-item post-toc-level-5"><a class="post-toc-link" href="#2-什么是缓存行（cache-line）"><span class="post-toc-number">1.0.2.2.</span> <span class="post-toc-text">2.什么是缓存行（cache line）</span></a></li><li class="post-toc-item post-toc-level-5"><a class="post-toc-link" href="#3-伪共享（flash-sharing）问题"><span class="post-toc-number">1.0.2.3.</span> <span class="post-toc-text">3.伪共享（flash sharing）问题</span></a></li><li class="post-toc-item post-toc-level-5"><a class="post-toc-link" href="#4-volatile保证可见性"><span class="post-toc-number">1.0.2.4.</span> <span class="post-toc-text">4.volatile保证可见性</span></a></li></ol></li><li class="post-toc-item post-toc-level-4"><a class="post-toc-link" href="#参考资料"><span class="post-toc-number">1.0.3.</span> <span class="post-toc-text">参考资料</span></a></li></ol></li></ol></li></ol>
+        </nav>
+    </aside>
+
+
+<article id="post-Volatile详解"
+  class="post-article article-type-post fade" itemprop="blogPost">
+
+    <div class="post-card">
+        <h1 class="post-card-title">Volatile详解</h1>
+        <div class="post-meta">
+            <time class="post-time" title="2020-10-21 08:48:39" datetime="2020-10-21T00:48:39.497Z"  itemprop="datePublished">2020-10-21</time>
+
+            
+
+
+            
+<span id="busuanzi_container_page_pv" title="文章总阅读量" style='display:none'>
+    <i class="icon icon-eye icon-pr"></i><span id="busuanzi_value_page_pv"></span>
+</span>
+
+
+        </div>
+        <div class="post-content" id="post-content" itemprop="postContent">
+            <h2 id="Volatile详解"><a href="#Volatile详解" class="headerlink" title="Volatile详解"></a>Volatile详解</h2><h4 id="一、Intel硬件提供了一系列的内存屏障："><a href="#一、Intel硬件提供了一系列的内存屏障：" class="headerlink" title="一、Intel硬件提供了一系列的内存屏障："></a>一、Intel硬件提供了一系列的内存屏障：</h4><ol>
+<li>lfence，是一种Load Barrier 读屏障 </li>
+<li>sfence, 是一种Store Barrier 写屏障 </li>
+<li>mfence, 是一种全能型的屏障，具备ifence和sfence的能力 </li>
+<li>Lock前缀，Lock不是一种内存屏障，但是它能完成类似内存屏障的功能。Lock会对CPU总线和高速缓存加锁，可以理解为CPU指令级的一种锁。它后面可以跟ADD, ADC, AND, BTC, BTR, BTS, CMPXCHG, CMPXCH8B, DEC, INC, NEG, NOT, OR, SBB, SUB, XOR, XADD, and XCHG等指令。</li>
+</ol>
+<p>《Java虚拟机规范》[1]中曾试图定义一种“Java内存模型”[2]（Java Memory Model，JMM）来屏 蔽各种硬件和操作系统的内存访问差异，以实现让Java程序在各种平台下都能达到一致的内存访问效 果。在此之前，主流程序语言（如C和C++等）直接使用物理硬件和操作系统的内存模型。因此，由于 不同平台上内存模型的差异，有可能导致程序在一套平台上并发完全正常，而在另外一套平台上并发 访问却经常出错，所以在某些场景下必须针对不同的平台来编写程序。</p>
+<h4 id="二、Votile保证了有序性、可见性"><a href="#二、Votile保证了有序性、可见性" class="headerlink" title="二、Votile保证了有序性、可见性"></a>二、Votile保证了有序性、可见性</h4><h5 id="1-为什么会发生不可见这种情况"><a href="#1-为什么会发生不可见这种情况" class="headerlink" title="1.为什么会发生不可见这种情况"></a>1.为什么会发生不可见这种情况</h5><p>​    那要从计算机硬件讲起，现代计算机cpu和内存之间都会存在着缓存，一般分为L1，L2，L3三级缓存，设计成这个样子主要是因为CPU的运行速度较快，但是内存的运行速度是远低于CPU的，所以为了减小这种速度的差距提高小效率就设计了三级缓存的概念。如图：</p>
+<figure class="image-bubble">
+                <div class="img-lightbox">
+                    <div class="overlay"></div>
+                    <img src="C:\Users\zhangzhg02\Desktop\1.png" alt="1" title="">
+                </div>
+                <div class="image-caption">1</div>
+            </figure>
+
+<p>因为这样的结构就导致了如果某个cpu从内存中读取数据（一个缓存行大小的数据）就会缓存到高速缓存中，如果cpu的两个核心同时操作了同一块数据，那么这一块数据同时会被缓存两份，一个核心操作一份，如果说某个核心对数据进行了修改，并且写回主内存，但是另外一个核心操作的还是旧的数据，这样就导致了数据的不可见。而加上了volitale就保证了可见性。这种情况下如何保证缓存数据的一致性，其实cpu采用了MESI 及其变种协议去做缓存一致性维护。我们主要来理解下什么是MESI：</p>
+<table>
+<thead>
+<tr>
+<th align="left">状态</th>
+<th align="left">描述</th>
+<th align="left">监听任务</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">M 修改 (Modified)</td>
+<td align="left">该Cache line有效，数据被修改了，和内存中的数据不一致，数据只存在于本Cache中。</td>
+<td align="left">缓存行必须时刻监听所有试图读该缓存行相对就主存的操作，这种操作必须在缓存将该缓存行写回主存并将状态变成S（共享）状态之前被延迟执行。</td>
+</tr>
+<tr>
+<td align="left">E 独享、互斥 (Exclusive)</td>
+<td align="left">该Cache line有效，数据和内存中的数据一致，数据只存在于本Cache中。</td>
+<td align="left">缓存行也必须监听其它缓存读主存中该缓存行的操作，一旦有这种操作，该缓存行需要变成S（共享）状态。</td>
+</tr>
+<tr>
+<td align="left">S 共享 (Shared)</td>
+<td align="left">该Cache line有效，数据和内存中的数据一致，数据存在于很多Cache中。</td>
+<td align="left">缓存行也必须监听其它缓存使该缓存行无效或者独享该缓存行的请求，并将该缓存行变成无效（Invalid）。</td>
+</tr>
+<tr>
+<td align="left">I 无效 (Invalid)</td>
+<td align="left">该Cache line无效。</td>
+<td align="left">无</td>
+</tr>
+</tbody></table>
+<p>通过上边表格我们可以发现，MESI其实就是四个字母的缩写，Modified,Exclusive,Shared,Invalid这四个单词分别代表了四种状态。</p>
+<p>这四种状态之间可以相互转换：</p>
+<p>​    一开始线程A将一个缓存行的数据读入Cache中，这时候的数据是Exclusive状态，数据只存在于本Cache中，同时它监听着其他缓存读取主存中该缓存行的操作，如果此时有某个线程B读取该缓存行，那么此时就将两个Cache中的缓存行置为Shared状态，此时缓存行在监听其他缓存使该缓存无效或者独享的请求，假设线程A对该缓存行的数据进行了修改，这时候总线嗅探机制嗅探到该缓存行的变化，则置线程B的缓存为Invalid无效状态，同时将线程A的缓存置为Modified状态。恰好线程B想再次读取该缓存行，那么线程B所在核心会通知线程A所在核心，将线程A修改后的数据同步到主内存，并且将所在Cache的缓存行设置为Exclusive状态。然后线程B从主存中读取数据到Cache中，同时将该缓存行设置为Shared状态。</p>
+<p>​    同时为了解决切换状态时候的堵塞问题还引入了Store Bufferes来解决这个问题，但是这种缓存一致性协议并不能够解决指令重排的问题，于是引入了内存屏障这个概念，也就是我们在上边讲到的各种内存屏障的实现。这种内存屏障的实现和硬件有很大的关系，java中的内存屏障其实就是借助于上边的第四种方式来实现的，也就是使用了Lock前缀。</p>
+<h5 id="2-什么是缓存行（cache-line）"><a href="#2-什么是缓存行（cache-line）" class="headerlink" title="2.什么是缓存行（cache line）"></a>2.什么是缓存行（cache line）</h5><p>​    刚才我们一直在提缓存行（Cache Line），到底什么是缓存行，缓存行可以理解成读取到高速缓冲区的最小单位，将数据从内存读取到缓存中的时候如果一个字节一个字节的读肯定是比较耗时的操作，所以根据程序的局部性原理就采取了按照缓存行的大小往高速缓冲区中读取，如果是64位的电脑我们的缓存行大小一般是64Bytes。</p>
+<h5 id="3-伪共享（flash-sharing）问题"><a href="#3-伪共享（flash-sharing）问题" class="headerlink" title="3.伪共享（flash sharing）问题"></a>3.伪共享（flash sharing）问题</h5><p>​    我们了解了缓存行，再来解析另外一个概念–伪共享，如果当两个缓存同时缓存了同一个缓存行的数据，但是呢并没有操作同一个数据，只是操作的数据都存在于同一个缓存行中，那么当线程A读取一个数据的时候，线程B修改处在缓存行中的另外一个数据，此时缓存A中的数据就要失效，并且将缓存B中的数据写回到主内存，这样频繁的往主存写重新从主存读取，会极大地消耗性能，这就是伪共享问题。一般我们在程序开发中并不会处理这种伪共享问题，但是在某些框架中会对伪共享问题进行处理，比如Disruptor在定义成员变量的时候会故意拼接无用的字节，使其成员变量不处在同一个缓存行中，以此来提高性能。同时JDK 8提供了一个 sun.misc.Contended注解，用来解决伪共享问题。</p>
+<h5 id="4-volatile保证可见性"><a href="#4-volatile保证可见性" class="headerlink" title="4.volatile保证可见性"></a>4.volatile保证可见性</h5><p>​    他是通过缓存一致性协议以及内存屏障来实现的，无论是volatile 还是普通变量在读写操作本身方面完全是一样的，即读写操作都交给 Cache，Cache 通过 MESI 及其变种协议去做缓存一致性维护。这两种变量的区别就只在于 内存屏障的使用上。</p>
+<p>class字节码层面：</p>
+<p>​    volatile 对代码生成的字节码本身没有影响，即 Java Method 生成的字节码无论里面操作的变量是不是 volatile 声明的，生成的字节码都是一样的。volatile 在字节码层面影响的是 Class 内 Field 的 access_flags我们可以看到下边代码的 flags: ACC_VOLATILE。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">volatile</span> <span class="keyword">int</span> v1;</span><br><span class="line">    descriptor: I</span><br><span class="line">    flags: ACC_VOLATILE</span><br><span class="line">   .....</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">readAndWrite</span><span class="params">()</span></span>;</span><br><span class="line">    descriptor: ()V</span><br><span class="line">    flags:</span><br><span class="line">    Code:</span><br><span class="line">      stack=<span class="number">3</span>, locals=<span class="number">3</span>, args_size=<span class="number">1</span></span><br><span class="line">         <span class="number">0</span>: aload_0</span><br><span class="line">         1: getfield      #52                 // Field v1:I</span><br><span class="line">         <span class="number">4</span>: istore_1</span><br><span class="line">         <span class="number">5</span>: aload_0</span><br><span class="line">         6: getfield      #54                 // Field v2:I</span><br><span class="line">         <span class="number">9</span>: istore_2</span><br><span class="line">        <span class="number">10</span>: aload_0</span><br><span class="line">        <span class="number">11</span>: iload_1</span><br><span class="line">        <span class="number">12</span>: iload_2</span><br></pre></td></tr></table></figure>
+
+<p>汇编源码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">0x0000000003fb5656</span>: mov    <span class="number">0x58</span>(%r10),%r8d</span><br><span class="line"><span class="number">0x0000000003fb565a</span>: mov    %r8d,%r11d</span><br><span class="line"><span class="number">0x0000000003fb565d</span>: add    $<span class="number">0x2</span>,%r11d</span><br><span class="line"><span class="number">0x0000000003fb5661</span>: mov    %r11d,<span class="number">0x58</span>(%r10)</span><br><span class="line"><span class="number">0x0000000003fb5665</span>: add    $<span class="number">0x4</span>,%r8d</span><br><span class="line"><span class="number">0x0000000003fb5669</span>: mov    %r8d,<span class="number">0x58</span>(%r10)</span><br><span class="line"><span class="number">0x0000000003fb566d</span>: lock addl $<span class="number">0x0</span>,(%rsp)     ;*putstatic a</span><br><span class="line">                                              ; -</span><br></pre></td></tr></table></figure>
+
+<p>​    通过看class字节码和汇编源码我们发现当有了volatile修饰以后最终在汇编源码上会带上lock addl这个前缀，这也就呼应了我们开篇讲的第四种实现内存屏障的方式。</p>
+<p>​    在jvm层面一共提供了四种内存屏障，它们分别是：LoadLoad，StoreStore，LoadStore，StoreLoad</p>
+<blockquote>
+<p><strong>LoadLoad：</strong>操作序列  Load1, LoadLoad, Load2，用于保证访问 Load2 的读取操作一定不能重排到 Load1 之前。类似于前面说的 Read Barrier，需要先处理 Invalidate Queue 后再读 Load2；</p>
+<p>**StoreStore:**操作序列 Store1, StoreStore, Store2，用于保证 Store1 及其之后写出的数据一定先于 Store2 写出，即别的 CPU 一定先看到 Store1 的数据，再看到 Store2 的数据。可能会有一次 Store Buffer 的刷写，也可能通过所有写操作都放入 Store Buffer 排序来保证；</p>
+<p><strong>LoadStore：</strong>操作序列 Load1, LoadStore, Store2，用于保证 Store2 及其之后写出的数据被其它 CPU 看到之前，Load1 读取的数据一定先读入缓存。甚至可能 Store2 的操作依赖于 Load1 的当前值。这个 Barrier 的使用场景可能和上一节讲的 Cache 架构模型很难对应，毕竟那是一个极简结构，并且只是一种具体的 Cache 架构，而 JVM 的 Barrier 要足够抽象去应付各种不同的 Cache 架构。如果跳出上一节的 Cache 架构来说，我理解用到这个 Barrier 的场景可能是说某种 CPU 在写 Store2 的时候，认为刷写 Store2 到内存，将其它 CPU 上 Store2 所在 Cache Line 设置为无效的速度要快于从内存读取 Load1，所以做了这种重排。</p>
+<p>**StoreLoad:**操作序列 Store1, StoreLoad, Load2，用于保证 Store1 写出的数据被其它 CPU 看到后才能读取 Load2 的数据到缓存。如果 Store1 和 Load2 操作的是同一个地址，StoreLoad Barrier 需要保证 Load2 不能读 Store Buffer 内的数据，得是从内存上拉取到的某个别的 CPU 修改过的值。StoreLoad一般会认为是最重的 Barrier 也是能实现其它所有 Barrier 功能的 Barrier。</p>
+</blockquote>
+<p>但是这四种内存屏障在jvm层面中都没有借助操作系统的内存屏障，而是借住了总线锁或者是缓存锁来实现了内存屏障的功能。并且在 x86 下除了 StoreLoad之外其它 Barrier 都是空操作。volatile并不是仅仅加入内存屏障这么简单，加入内存屏障只是volatile内核指令级别的内存语义，除此之外：volatile还可以禁止编译器的指令重排，因为JVM为了优化性能并且不违反happens-before原则的前提下也会进行指令重排。禁止编译器指令重排如下：</p>
+<blockquote>
+<p>/* The “volatile” is due to gcc bugs */<br>#define barrier() <strong>asm</strong> <strong>volatile</strong>(“”: : :”memory”)  </p>
+</blockquote>
+<p>volatile的内存屏障策略非常严格保守：</p>
+<blockquote>
+<p>在每个volatile写操作前插入StoreStore屏障，在写操作后插入StoreLoad屏障；<br>在每个volatile读操作前插入LoadLoad屏障，在读操作后插入LoadStore屏障;</p>
+</blockquote>
+<p><strong>总线锁</strong></p>
+<p>对于早期的CPU，总是采用的是锁总线的方式。具体方法是，一旦遇到了Lock指令，就由仲裁器选择一个核心独占总线。其余的CPU核心不能再通过总线与内存通讯。从而达到“原子性”的目的。具体做法是，某一个核心触发总线的“Lock#”那根线，让总线仲裁器工作，把总线完全分给某个核心。</p>
+<p><strong>缓存锁</strong></p>
+<p>如果访问的内存区域已经缓存在处理器的缓存行中，P6系统和之后系列的处理器则不会声明LOCK#信号，它会对CPU的缓存中的缓存行进行锁定，在锁定期间，其它 CPU 不能同时缓存此数据，在修改之后，通过<code>缓存一致性</code>协议来保证修改的原子性，这个操作被称为缓存锁。</p>
+<p><strong>锁的选择</strong></p>
+<p>如果是P6后的CPU，并且数据已经被CPU缓存了，并且是要写回到主存的，则可以用cache locking处理问题。<strong>否则还是得锁总线</strong>。因此，lock到底用锁总线，还是用cache locking，完全是看当时的情况。当然能用后者的就肯定用后者。</p>
+<blockquote>
+<p>Intel P6是Intel第6代架构的CPU，其实也很老了，差不多1995年出的…… 比如Pentium Pro，Pentium II，Pentium III都隶属于P6架构“</p>
+</blockquote>
+<p>总之，加上了volatile以后再CPU底层并没有采用系统的内存屏障，而是借用了总线锁或者是缓存锁来实现了内存屏障的功能。以此volatile保证了可见性。同时因为屏障的存在禁止了cpu的指令重排，也因此实现了有序性这个特性。</p>
+<h4 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h4><p> <a href="https://www.zhihu.com/question/65372648" target="_blank" rel="noopener">https://www.zhihu.com/question/65372648</a></p>
+<p><a href="https://www.cnblogs.com/yanlong300/p/8986041.html" target="_blank" rel="noopener">https://www.cnblogs.com/yanlong300/p/8986041.html</a></p>
+<p><a href="https://blog.csdn.net/breakout_alex/article/details/94379895" target="_blank" rel="noopener">https://blog.csdn.net/breakout_alex/article/details/94379895</a></p>
+<p><a href="https://segmentfault.com/a/1190000014315651" target="_blank" rel="noopener">https://segmentfault.com/a/1190000014315651</a></p>
+<p><a href="https://juejin.im/post/6844904144273145863" target="_blank" rel="noopener">https://juejin.im/post/6844904144273145863</a></p>
+<p><a href="https://blog.csdn.net/wll1228/article/details/107775976" target="_blank" rel="noopener">https://blog.csdn.net/wll1228/article/details/107775976</a></p>
+<p><strong>windows下查看汇编指令：</strong></p>
+<p><a href="https://blog.csdn.net/xiaomojun/article/details/94654616" target="_blank" rel="noopener">https://blog.csdn.net/xiaomojun/article/details/94654616</a></p>
+
+        </div>
+
+        <blockquote class="post-copyright">
+    
+    <div class="content">
+        
+<span class="post-time">
+    最后更新时间：<time datetime="2020-10-21T08:48:59.042Z" itemprop="dateUpdated">2020-10-21 16:48:59</time>
+</span><br>
+
+
+        
+        这里可以写作者留言，标签和 hexo 中所有变量及辅助函数等均可调用，示例：<a href="/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/" target="_blank" rel="external">http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/</a>
+        
+    </div>
+    
+    <footer>
+        <a href="http://yoursite.com">
+            <img src="/images/dog.jpg" alt="TankyZhang">
+            TankyZhang
+        </a>
+    </footer>
+</blockquote>
+
+        
+<div class="page-reward">
+    <a id="rewardBtn" href="javascript:;" class="page-reward-btn waves-effect waves-circle waves-light">赏</a>
+</div>
+
+
+
+        <div class="post-footer">
+            
+
+            
+<div class="page-share-wrap">
+    
+
+<div class="page-share" id="pageShare">
+    <ul class="reset share-icons">
+      <li>
+        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/&title=《Volatile详解》 — tanky&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
+          <i class="icon icon-weibo"></i>
+        </a>
+      </li>
+      <li>
+        <a class="weixin share-sns wxFab" href="javascript:;" data-title="微信">
+          <i class="icon icon-weixin"></i>
+        </a>
+      </li>
+      <li>
+        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/&title=《Volatile详解》 — tanky&source=" data-title=" QQ">
+          <i class="icon icon-qq"></i>
+        </a>
+      </li>
+      <li>
+        <a class="facebook share-sns" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/" data-title=" Facebook">
+          <i class="icon icon-facebook"></i>
+        </a>
+      </li>
+      <li>
+        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《Volatile详解》 — tanky&url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
+          <i class="icon icon-twitter"></i>
+        </a>
+      </li>
+      <li>
+        <a class="google share-sns" target="_blank" href="https://plus.google.com/share?url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/" data-title=" Google+">
+          <i class="icon icon-google-plus"></i>
+        </a>
+      </li>
+    </ul>
+ </div>
+
+
+
+    <a href="javascript:;" id="shareFab" class="page-share-fab waves-effect waves-circle">
+        <i class="icon icon-share-alt icon-lg"></i>
+    </a>
+</div>
+
+
+
+        </div>
+    </div>
+
+    
+<nav class="post-nav flex-row flex-justify-between flex-row-reverse">
+  
+
+  
+    <div class="waves-block waves-effect next">
+      <a href="/2020/10/20/%E5%A4%9A%E7%BA%BF%E7%A8%8B/" id="post-next" class="post-nav-link">
+        <div class="tips">Next <i class="icon icon-angle-right icon-lg icon-pl"></i></div>
+        <h4 class="title">多线程</h4>
+      </a>
+    </div>
+  
+</nav>
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</article>
+
+<div id="reward" class="page-modal reward-lay">
+    <a class="close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <h3 class="reward-title">
+        <i class="icon icon-quote-left"></i>
+        谢谢大爷~
+        <i class="icon icon-quote-right"></i>
+    </h3>
+    <div class="reward-content">
+        
+        <div class="reward-code">
+            <img id="rewardCode" src="/img/wechat.jpg" alt="打赏二维码">
+        </div>
+        
+        <label class="reward-toggle">
+            <input id="rewardToggle" type="checkbox" class="reward-toggle-check"
+                data-wechat="/img/wechat.jpg" data-alipay="/img/alipay.jpg">
+            <div class="reward-toggle-ctrol">
+                <span class="reward-toggle-item wechat">微信</span>
+                <span class="reward-toggle-label"></span>
+                <span class="reward-toggle-item alipay">支付宝</span>
+            </div>
+        </label>
+        
+    </div>
+</div>
+
+
+
+</div>
+
+        <footer class="footer">
+    <div class="top">
+        
+<p>
+    <span id="busuanzi_container_site_uv" style='display:none'>
+        站点总访客数：<span id="busuanzi_value_site_uv"></span>
+    </span>
+    <span id="busuanzi_container_site_pv" style='display:none'>
+        站点总访问量：<span id="busuanzi_value_site_pv"></span>
+    </span>
+</p>
+
+
+        <p>
+            
+            <span>博客内容遵循 <a rel="license noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank">知识共享 署名 - 非商业性 - 相同方式共享 4.0 国际协议</a></span>
+        </p>
+    </div>
+    <div class="bottom">
+        <p><span>TankyZhang &copy; 2015 - 2020</span>
+            <span>
+                
+                Power by <a href="http://hexo.io/" target="_blank">Hexo</a> Theme <a href="https://github.com/yscoder/hexo-theme-indigo" target="_blank">indigo</a>
+            </span>
+        </p>
+    </div>
+</footer>
+
+    </main>
+    <div class="mask" id="mask"></div>
+<a href="javascript:;" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
+
+
+
+<div class="global-share" id="globalShare">
+    <ul class="reset share-icons">
+      <li>
+        <a class="weibo share-sns" target="_blank" href="http://service.weibo.com/share/share.php?url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/&title=《Volatile详解》 — tanky&pic=http://yoursite.com/images/dog.jpg" data-title="微博">
+          <i class="icon icon-weibo"></i>
+        </a>
+      </li>
+      <li>
+        <a class="weixin share-sns wxFab" href="javascript:;" data-title="微信">
+          <i class="icon icon-weixin"></i>
+        </a>
+      </li>
+      <li>
+        <a class="qq share-sns" target="_blank" href="http://connect.qq.com/widget/shareqq/index.html?url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/&title=《Volatile详解》 — tanky&source=" data-title=" QQ">
+          <i class="icon icon-qq"></i>
+        </a>
+      </li>
+      <li>
+        <a class="facebook share-sns" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/" data-title=" Facebook">
+          <i class="icon icon-facebook"></i>
+        </a>
+      </li>
+      <li>
+        <a class="twitter share-sns" target="_blank" href="https://twitter.com/intent/tweet?text=《Volatile详解》 — tanky&url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/&via=http://yoursite.com" data-title=" Twitter">
+          <i class="icon icon-twitter"></i>
+        </a>
+      </li>
+      <li>
+        <a class="google share-sns" target="_blank" href="https://plus.google.com/share?url=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/" data-title=" Google+">
+          <i class="icon icon-google-plus"></i>
+        </a>
+      </li>
+    </ul>
+ </div>
+
+
+<div class="page-modal wx-share" id="wxShare">
+    <a class="close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <img src="//api.qrserver.com/v1/create-qr-code/?data=http://yoursite.com/2020/10/21/Volatile%E8%AF%A6%E8%A7%A3/" alt="微信分享二维码">
+</div>
+
+
+
+
+    <script src="//cdn.bootcss.com/node-waves/0.7.4/waves.min.js"></script>
+<script>
+var BLOG = { ROOT: '/', SHARE: true, REWARD: true };
+
+
+</script>
+
+<script src="//unpkg.com/hexo-theme-material-indigo@latest/js/main.min.js"></script>
+
+
+<div class="search-panel" id="search-panel">
+    <ul class="search-result" id="search-result"></ul>
+</div>
+<template id="search-tpl">
+<li class="item">
+    <a href="{path}" class="waves-block waves-effect">
+        <div class="title ellipsis" title="{title}">{title}</div>
+        <div class="flex-row flex-middle">
+            <div class="tags ellipsis">
+                {tags}
+            </div>
+            <time class="flex-col time">{date}</time>
+        </div>
+    </a>
+</li>
+</template>
+
+<script src="//unpkg.com/hexo-theme-material-indigo@latest/js/search.min.js" async></script>
+
+
+
+
+
+
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+<script>
+(function() {
+    var OriginTitile = document.title, titleTime;
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            document.title = '死鬼去哪里了！';
+            clearTimeout(titleTime);
+        } else {
+            document.title = '(つェ⊂)咦!又好了!';
+            titleTime = setTimeout(function() {
+                document.title = OriginTitile;
+            },2000);
+        }
+    });
+})();
+</script>
+
+
+
+</body>
+</html>
